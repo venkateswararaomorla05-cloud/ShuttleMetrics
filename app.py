@@ -416,6 +416,16 @@ elif page == "My Player Profile":
         </div>
     """, unsafe_allow_html=True)
     with st.form("my_profile_form"):
+            st.markdown("""
+        <div style="margin: 8px 0 18px 0;">
+            <h3 style="color: #E5EEF8; margin-bottom: 5px;">
+                Player Details
+            </h3>
+            <p style="color: #91A7BD; font-size: 14px; margin-top: 0;">
+                Set up your playing identity and skill level.
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
         name = st.text_input("Player name", value=player["name"] if player else "")
         age = st.number_input("Age", min_value=5, max_value=100, value=int(player["age"]) if player and player["age"] else 18)
         styles = ["Attacking", "Defensive", "All-round"]
