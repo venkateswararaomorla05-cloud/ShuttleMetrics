@@ -519,41 +519,101 @@ elif page == "My Portfolio":
             matches[metric_cols] = matches[metric_cols].apply(pd.to_numeric, errors="coerce")
             st.markdown("#### Metric Averages")
             st.dataframe(matches[metric_cols].mean().rename("Average").to_frame(), use_container_width=True)
-            st.markdown("#### Latest Match vs All Previous Matches")
+            
+            st.markdown("### ⚡ Latest Match Performance")
+
             if len(matches) < 2:
-                st.info("Record another match to compare performance.")
+                st.info(
+                    "Record at least two matches to compare your latest "
+                    "performance with your previous-match average."
+                )
             else:
                 latest = matches.iloc[-1]
                 previous = matches.iloc[:-1]
-                advice = []
-                for metric in metric_cols:
-                    old = previous[metric].dropna()
-                    current = latest[metric]
-                    label = metric.replace("_", " ").title()
-                    if pd.isna(current) or old.empty:
-                        st.write(f"{label}: insufficient data")
+
+                comparisons = [
+                    ("unforced_errors", "Unforced Errors", "lower"),
+                    ("forced_errors", "Forced Errors", "context"),
+                    ("smash_winners", "Smash Winners", "higher"),
+                ]
+
+                st.caption(
+                    "Your latest match is compared with the average of "
+                    "all earlier recorded matches."
+                )
+
+                for metric, label, direction in comparisons:
+                    old_values = pd.to_numeric(
+                        previous[metric], errors="coerce"
+                    ).dropna()
+                    current = pd.to_numeric(
+                        pd.Series([latest[metric]]), errors="coerce"
+                    ).iloc[0]
+
+                    st.markdown(f"#### {label}")
+
+                    if pd.isna(current) or old_values.empty:
+                        st.info(f"Not enough data for {label.lower()}.")
                         continue
-                    average = old.mean()
+
+                    average = old_values.mean()
                     difference = current - average
-                    st.write(
-                        f"**{label}:** latest {current:g}; previous average {average:.2f}; "
-                        f"difference {difference:+.2f}"
+
+                    left, middle, right = st.columns(3)
+                    left.metric("Latest match", f"{current:g}")
+                    middle.metric("Previous average", f"{average:.2f}")
+                    right.metric(
+                        "Difference",
+                        f"{difference:+.2f}",
+                        delta_color=(
+                            "inverse" if direction == "lower" else "normal"
+                        ) if direction != "context" else "off"
                     )
-                    if metric == "unforced_errors":
-                        advice.append(
-                            "Practise shot selection and consistency; unforced errors are above your previous average."
-                            if difference > 0 else "Maintain consistency and keep reviewing unforced errors."
+
+                    if direction == "lower":
+                        if difference < 0:
+                            st.success(
+                                "Improvement: fewer unforced errors "
+                                "than your previous average."
+                            )
+                        elif difference > 0:
+                            st.warning(
+                                "Focus area: review shot selection and "
+                                "consistency to reduce unforced errors."
+                            )
+                        else:
+                            st.info(
+                                "Unforced errors are at your previous average."
+                            )
+
+                    elif direction == "higher":
+                        if difference > 0:
+                            st.success(
+                                "More smash winners than your previous average."
+                            )
+                        elif difference < 0:
+                            st.info(
+                                "Practise smash timing, placement and "
+                                "creating attacking opportunities."
+                            )
+                        else:
+                            st.info(
+                                "Smash winners are at your previous average."
+                            )
+
+                    else:
+                        st.info(
+                            "Forced errors depend on opponent pressure. "
+                            "Review match context before judging this metric."
                         )
-                    elif metric == "forced_errors":
-                        advice.append("Review defensive positioning and opponent pressure. A forced-error count alone does not prove poor defence.")
-                    elif metric == "smash_winners":
-                        advice.append(
-                            "Practise smash timing, placement, and setting up attacking opportunities."
-                            if difference < 0 else "Maintain smash accuracy and vary attacking placement."
-                        )
-                st.markdown("#### Training Recommendations")
-                for item in advice:
-                    st.write(f"- {item}")
+
+                st.markdown("### 🎯 Training Focus")
+                st.write(
+                    "Use these comparisons as guidance, not as a definitive "
+                    "measure of performance. Consider your opponent, match "
+                    "length and playing conditions."
+                )
+
 
 # ---------------- MATCH PREDICTION ----------------
 elif page == "Match Prediction":
