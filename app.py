@@ -1,5 +1,3 @@
-
-
 import hashlib
 import hmac
 import os
@@ -562,76 +560,6 @@ elif page == "My Portfolio":
             st.dataframe(matches[metric_cols].mean().rename("Average").to_frame(), use_container_width=True)
             
             st.markdown("### ⚡ Latest Match Performance")
-                        st.markdown("### 📈 Performance Trends")
-
-            chart_limit = st.selectbox(
-                "Matches to display",
-                options=["Last 5 matches", "Last 10 matches", "All matches"],
-                index=1,
-                key="portfolio_chart_limit",
-            )
-
-            chart_data = matches.copy()
-
-            metric_cols = [
-                "unforced_errors",
-                "forced_errors",
-                "smash_winners",
-            ]
-
-            for metric in metric_cols:
-                chart_data[metric] = pd.to_numeric(
-                    chart_data[metric], errors="coerce"
-                )
-
-            chart_data["Match"] = range(1, len(chart_data) + 1)
-
-            if chart_limit == "Last 5 matches":
-                chart_data = chart_data.tail(5)
-            elif chart_limit == "Last 10 matches":
-                chart_data = chart_data.tail(10)
-
-            chart_data = chart_data.copy()
-            chart_data["Match label"] = [
-                f"Match {n}" for n in chart_data["Match"]
-            ]
-
-            st.caption(
-                f"Showing {len(chart_data)} of {len(matches)} recorded matches. "
-                "Your complete match history remains available above."
-            )
-
-            left, right = st.columns(2)
-
-            with left:
-                st.markdown("#### Error Trends")
-                error_data = chart_data.set_index("Match label")[
-                    ["unforced_errors", "forced_errors"]
-                ]
-                st.line_chart(error_data, height=300)
-
-            with right:
-                st.markdown("#### Smash Winners")
-                smash_data = chart_data.set_index("Match label")[
-                    ["smash_winners"]
-                ]
-                st.bar_chart(smash_data, height=300)
-
-            st.caption(
-                "Lower unforced errors and higher smash winners are generally "
-                "desirable. Interpret forced errors in match context."
-            )
-
-            st.markdown("#### 🏆 Match Results")
-
-            result_counts = (
-                chart_data["result"]
-                .str.lower()
-                .value_counts()
-                .reindex(["win", "loss"], fill_value=0)
-            )
-
-            st.bar_chart(result_counts)
 
             if len(matches) < 2:
                 st.info(
