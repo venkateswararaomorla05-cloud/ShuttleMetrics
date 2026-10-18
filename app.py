@@ -388,24 +388,33 @@ if page == "Home":
 
 # ---------------- PLAYER PROFILE ----------------
 elif page == "My Player Profile":
-    st.subheader("My Player Profile")
-    with st.form("my_profile_form"):
-        name = st.text_input("Player name", value=player["name"] if player else "")
-        age = st.number_input("Age", min_value=5, max_value=100, value=int(player["age"]) if player and player["age"] else 18)
-        styles = ["Attacking", "Defensive", "All-round"]
-        levels = ["Beginner", "Intermediate", "Advanced"]
-        style_default = player["playing_style"] if player and player["playing_style"] in styles else "Attacking"
-        level_default = player["skill_level"] if player and player["skill_level"] in levels else "Beginner"
-        style = st.selectbox("Playing style", styles, index=styles.index(style_default))
-        level = st.selectbox("Skill level", levels, index=levels.index(level_default))
-        submit = st.form_submit_button("Save my profile")
-    if submit:
-        if not name.strip():
-            st.error("Please enter your player name.")
-        else:
-            create_player(user_id, name, int(age), style, level)
-            st.success("Your private player profile has been saved.")
-            st.rerun()
+    st.markdown("""
+        <div style="
+            background: linear-gradient(120deg, #10243A, #173D4B);
+            padding: 28px;
+            border-radius: 18px;
+            border-left: 5px solid #20D6B5;
+            margin-bottom: 24px;
+        ">
+            <div style="
+                color: #20D6B5;
+                font-size: 12px;
+                font-weight: 700;
+                letter-spacing: 2px;
+                text-transform: uppercase;
+            ">PLAYER CENTER</div>
+            <h1 style="
+                color: #FFFFFF;
+                margin: 8px 0;
+                font-size: 32px;
+            ">My Player Profile 🏸</h1>
+            <p style="
+                color: #C4D4E2;
+                font-size: 15px;
+                margin-bottom: 0;
+            ">Build your badminton identity and personalize your performance dashboard.</p>
+        </div>
+    """, unsafe_allow_html=True)
 
 # ---------------- RECORD MATCH ----------------
 elif page == "Record Match":
