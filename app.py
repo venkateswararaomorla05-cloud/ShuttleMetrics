@@ -415,6 +415,60 @@ elif page == "My Player Profile":
             ">Build your badminton identity and personalize your performance dashboard.</p>
         </div>
     """, unsafe_allow_html=True)
+    with st.form("my_profile_form"):
+        name = st.text_input("Player name", value=player["name"] if player else "")
+        age = st.number_input("Age", min_value=5, max_value=100, value=int(player["age"]) if player and player["age"] else 18)
+        styles = ["Attacking", "Defensive", "All-round"]
+        levels = ["Beginner", "Intermediate", "Advanced"]
+        style_default = player["playing_style"] if player and player["playing_style"] in styles else "Attacking"
+        level_default = player["skill_level"] if player and player["skill_level"] in levels else "Beginner"
+        style = st.selectbox("Playing style", styles, index=styles.index(style_default))
+        level = st.selectbox("Skill level", levels, index=levels.index(level_default))
+        submit = st.form_submit_button("Save my profile")
+    if submit:
+        if not name.strip():
+            st.error("Please enter your player name.")
+        else:
+            create_player(user_id, name, int(age), style, level)
+            st.success("Your private player profile has been saved.")
+            st.rerun()
+
+# ---------------- RECORD MATCH ----------------
+elif page == "Record Match":
+    st.subheader("Record My Match")
+    if not player:
+        st.warning("Create your player profile first.")
+    else:
+        with st.form("record_match_form", clear_on_submit=True):
+            match_date = st.date_input("Match date")
+            opponent = st.text_input("Opponent")
+            result = st.selectbox("Result", ["win", "loss"])
+            unforced = st.number_input("Unforced errors", min_value=0, value=0, step=1)
+            forced = st.number_input("Forced errors", min_value=0, value=0, step=1)
+            smash = st.number_input("Smash winners", min_value=0, value=0, step=1)
+            notes = st.text_area("Notes")
+            save = st.form_submit_button("Save match")
+        if save:
+            with connect_db() as conn:
+                # Ensure this profile belongs to the logged-in account.
+                owned = conn.execute(
+                    "SELECT player_id FROM players WHERE player_id=? AND user_id=?",
+                    (player["player_id"], user_id),
+                ).fetchone()
+                if not owned:
+                    st.error("You do not have permission to update this profile.")
+                else:
+                    conn.execute("""
+                        INSERT INTO matches (
+                            player_id, match_date, opponent, result,
+                            unforced_errors, forced_errors, smash_winners, notes
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        int(player["player_id"]), str(match_date), opponent.strip(), result,
+                        int(unforced), int(forced), int(smash), notes.strip(),
+                    ))
+                    st.success("Your match has been recorded.")
+
 
 # ---------------- RECORD MATCH ----------------
 elif page == "Record Match":
