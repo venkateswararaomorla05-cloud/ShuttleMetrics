@@ -10,6 +10,66 @@ import pandas as pd
 import streamlit as st
 
 st.set_page_config(page_title="ShuttleMetrics", page_icon="🏸", layout="wide")
+st.markdown("""
+<style>
+/* ShuttleMetrics - dark sports theme */
+.stApp {
+    background: linear-gradient(135deg, #08111f 0%, #101d30 100%);
+    color: #f1f5f9;
+}
+
+[data-testid="stSidebar"] {
+    background-color: #0b1627;
+    border-right: 1px solid #243449;
+}
+
+h1, h2, h3 {
+    color: #f8fafc !important;
+    font-weight: 750 !important;
+}
+
+p, label, span {
+    color: #dbe5ef;
+}
+
+div.stButton > button {
+    background: #0f766e;
+    color: white;
+    border: 1px solid #2dd4bf;
+    border-radius: 10px;
+    padding: 0.55rem 1rem;
+    font-weight: 600;
+}
+
+div.stButton > button:hover {
+    background: #115e59;
+    color: white;
+    border: 1px solid #f97316;
+}
+
+div[data-testid="stMetric"] {
+    background: #142238;
+    border: 1px solid #2b4058;
+    padding: 18px;
+    border-radius: 14px;
+}
+
+div[data-testid="stMetricValue"] {
+    color: #2dd4bf;
+}
+
+input, textarea {
+    background-color: #142238 !important;
+}
+
+div[data-testid="stForm"] {
+    background-color: #101d30;
+    padding: 18px;
+    border: 1px solid #2b4058;
+    border-radius: 14px;
+}
+</style>
+""", unsafe_allow_html=True)
 
 BASE_DIR = Path(__file__).parent
 DB_PATH = Path(os.environ.get("SHUTTLEMETRICS_DB_PATH", str(BASE_DIR / "shuttlemetrics.db")))
