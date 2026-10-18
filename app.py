@@ -467,6 +467,54 @@ elif page == "My Portfolio":
             c4.metric("Win rate", f"{wins / total * 100:.1f}%")
             st.markdown("#### Match History")
             st.dataframe(matches, use_container_width=True)
+            
+            st.markdown("### 📈 Performance Trends")
+
+            chart_data = matches.copy()
+            metric_cols = [
+                "unforced_errors",
+                "forced_errors",
+                "smash_winners",
+            ]
+
+            for metric in metric_cols:
+                chart_data[metric] = pd.to_numeric(
+                    chart_data[metric], errors="coerce"
+                )
+
+            chart_data["Match"] = range(1, len(chart_data) + 1)
+
+            left, right = st.columns(2)
+
+            with left:
+                st.markdown("#### Error Trends")
+                error_data = chart_data.set_index("Match")[
+                    ["unforced_errors", "forced_errors"]
+                ]
+                st.line_chart(error_data)
+
+            with right:
+                st.markdown("#### Smash Winners")
+                smash_data = chart_data.set_index("Match")[
+                    ["smash_winners"]
+                ]
+                st.bar_chart(smash_data)
+
+            st.caption(
+                "Each point represents a recorded match in date order. "
+                "Lower unforced errors and higher smash winners are "
+                "generally desirable; interpret forced errors in context."
+            )
+
+            st.markdown("### 🏆 Match Results")
+            result_counts = (
+                chart_data["result"]
+                .str.lower()
+                .value_counts()
+                .reindex(["win", "loss"], fill_value=0)
+            )
+            st.bar_chart(result_counts)
+
             metric_cols = ["unforced_errors", "forced_errors", "smash_winners"]
             matches[metric_cols] = matches[metric_cols].apply(pd.to_numeric, errors="coerce")
             st.markdown("#### Metric Averages")
