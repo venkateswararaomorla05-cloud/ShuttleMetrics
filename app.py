@@ -297,22 +297,94 @@ st.caption("Your private badminton performance analyzer")
 
 player = load_player(user_id)
 
+
+
 # ---------------- HOME ----------------
 if page == "Home":
-    st.subheader(f"Welcome, {user['username']}!")
-    st.write("Manage your own player profile, record matches, and review performance trends.")
+    st.markdown("""
+    <div style="
+        background: linear-gradient(120deg, #102238, #115e59);
+        padding: 32px 28px;
+        border-radius: 18px;
+        border: 1px solid #2dd4bf;
+        margin-bottom: 24px;
+    ">
+        <p style="color:#5eead4; font-size:13px; letter-spacing:2px;">
+            BADMINTON PERFORMANCE ANALYTICS
+        </p>
+        <h1 style="color:white; font-size:38px; margin:8px 0;">
+            Own Your Game.
+        </h1>
+        <p style="color:#dbeafe; font-size:17px;">
+            Track every match. Understand your performance.
+            Find your next improvement.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.subheader(f"Welcome back, {user['username']}!")
+    st.write("Your personal badminton performance centre.")
+
     with connect_db() as conn:
         total_matches = conn.execute("""
             SELECT COUNT(*)
-            FROM matches m JOIN players p ON p.player_id = m.player_id
+            FROM matches m
+            JOIN players p ON p.player_id = m.player_id
             WHERE p.user_id = ?
         """, (user_id,)).fetchone()[0]
-    a, b = st.columns(2)
-    a.metric("Your player profile", "Created" if player else "Not created")
-    b.metric("Your matches recorded", int(total_matches))
-    st.info("Your profile and match records are filtered by your account. Other players' records are not shown.")
+
+        total_wins = conn.execute("""
+            SELECT COUNT(*)
+            FROM matches m
+            JOIN players p ON p.player_id = m.player_id
+            WHERE p.user_id = ? AND LOWER(m.result) = 'win'
+        """, (user_id,)).fetchone()[0]
+
+    win_rate = (
+        f"{total_wins / total_matches * 100:.1f}%"
+        if total_matches else "—"
+    )
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("PLAYER PROFILE", "Ready" if player else "Not created")
+    c2.metric("MATCHES PLAYED", int(total_matches))
+    c3.metric("WIN RATE", win_rate)
+
+    st.markdown("### Your Performance Centre")
+
+    a, b, c = st.columns(3)
+
+    with a:
+        st.markdown("#### 🏸 Player Profile")
+        st.caption("Manage your playing style and skill level.")
+        st.markdown("**Navigate:** My Player Profile")
+
+    with b:
+        st.markdown("#### 📊 Match Tracking")
+        st.caption("Record results, errors and smash winners.")
+        st.markdown("**Navigate:** Record Match")
+
+    with c:
+        st.markdown("#### 📈 Performance Review")
+        st.caption("Review match history and improvement trends.")
+        st.markdown("**Navigate:** My Portfolio")
+
     if not player:
-        st.warning("Create your player profile using **My Player Profile** to start recording matches.")
+        st.warning(
+            "Get started: create your player profile "
+            "before recording your first match."
+        )
+    elif total_matches == 0:
+        st.info(
+            "Your profile is ready! Record your first match "
+            "to start building your performance history."
+        )
+    else:
+        st.success(
+            f"You have recorded {int(total_matches)} match(es). "
+            "Open My Portfolio to review your performance."
+        )
+
 
 # ---------------- PLAYER PROFILE ----------------
 elif page == "My Player Profile":
