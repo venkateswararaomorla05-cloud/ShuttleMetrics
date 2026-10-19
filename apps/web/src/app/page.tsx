@@ -1,7 +1,6 @@
-
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import {
   Activity,
   ArrowDownRight,
@@ -191,6 +190,28 @@ export default function HomePage() {
   const [playerTwo, setPlayerTwo] = useState("");
   const [prediction, setPrediction] = useState(false);
   const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    try {
+      const savedProfile = localStorage.getItem("shuttlemetrics-player-profile");
+      if (!savedProfile) return;
+
+      const profile = JSON.parse(savedProfile);
+
+      if (typeof profile.playerName === "string" && profile.playerName.trim()) {
+        setPlayerName(profile.playerName);
+      }
+      if (typeof profile.playingLevel === "string") {
+        setPlayingLevel(profile.playingLevel);
+      }
+      if (typeof profile.playingStyle === "string") {
+        setPlayingStyle(profile.playingStyle);
+      }
+    } catch {
+      localStorage.removeItem("shuttlemetrics-player-profile");
+    }
+  }, []);
+
 
   const totalMatches = matches.length;
   const wins = matches.filter((match) => match.result === "Won").length;
@@ -556,7 +577,29 @@ export default function HomePage() {
             className="form-grid"
             onSubmit={(event) => {
               event.preventDefault();
-              setNotice("Profile updated for this session.");
+
+              const name = playerName.trim();
+              if (!name) {
+                setNotice("Please enter your player name.");
+                return;
+              }
+
+              const profile = {
+                playerName: name,
+                playingLevel,
+                playingStyle,
+              };
+
+              try {
+                localStorage.setItem(
+                  "shuttlemetrics-player-profile",
+                  JSON.stringify(profile)
+                );
+                setPlayerName(name);
+                setNotice("Profile saved successfully in this browser.");
+              } catch {
+                setNotice("Could not save the profile in this browser. Check browser storage settings.");
+              }
             }}
           >
             <label className="field full-width">
@@ -600,8 +643,8 @@ export default function HomePage() {
             </div>
           </form>
           <p className="form-note">
-            This preview stores changes only in the current browser session.
-            Persistent profiles will be added with Supabase.
+            Your player name and playing preferences are saved in this browser.
+            Supabase syncing across devices will be added separately.
           </p>
         </div>
       </section>
