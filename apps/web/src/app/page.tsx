@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import { createClient, type SupabaseClient, type Session } from "@supabase/supabase-js";
 import {
   Activity,
   ArrowDownRight,
@@ -35,7 +36,7 @@ type Page =
   | "Match Prediction";
 
 type Match = {
-  id: number;
+  id: string;
   opponent: string;
   date: string;
   result: "Won" | "Lost";
@@ -45,38 +46,33 @@ type Match = {
   smashes: number;
 };
 
-const initialMatches: Match[] = [
-  {
-    id: 1,
-    opponent: "Player Alpha",
-    date: "Oct 17, 2026",
-    result: "Won",
-    score: "21–17, 21–14",
-    unforced: 8,
-    forced: 12,
-    smashes: 15,
-  },
-  {
-    id: 2,
-    opponent: "Player Bravo",
-    date: "Oct 15, 2026",
-    result: "Won",
-    score: "21–19, 18–21, 21–16",
-    unforced: 11,
-    forced: 14,
-    smashes: 12,
-  },
-  {
-    id: 3,
-    opponent: "Player Charlie",
-    date: "Oct 12, 2026",
-    result: "Lost",
-    score: "17–21, 16–21",
-    unforced: 16,
-    forced: 9,
-    smashes: 8,
-  },
-];
+
+type ProfileRow = {
+  id: string;
+  username: string;
+  playing_level: string;
+  playing_style: string;
+  profile_image: string | null;
+};
+
+type MatchRow = {
+  id: string;
+  user_id: string;
+  opponent: string;
+  played_at: string;
+  result: "Won" | "Lost";
+  score: string;
+  unforced: number;
+  forced: number;
+  smashes: number;
+};
+
+function getSupabase(): SupabaseClient | null {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key);
+}
 
 const navItems: { label: Page; icon: typeof Home }[] = [
   { label: "Home", icon: Home },
@@ -174,8 +170,8 @@ function EmptyState({
 export default function HomePage() {
   const [activePage, setActivePage] = useState<Page>("Home");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [matches, setMatches] = useState<Match[]>(initialMatches);
-  const [playerName, setPlayerName] = useState("Your Player Profile");
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [playerName, setPlayerName] = useState("");
   const [playingLevel, setPlayingLevel] = useState("Intermediate");
   const [playingStyle, setPlayingStyle] = useState("Attacking");
   const [profileImage, setProfileImage] = useState("");
@@ -190,28 +186,139 @@ export default function HomePage() {
   const [playerTwo, setPlayerTwo] = useState("");
   const [prediction, setPrediction] = useState(false);
   const [search, setSearch] = useState("");
+  const [supabase] = useState<SupabaseClient | null>(() => getSupabase());
+  const [session, setSession] = useState<Session | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [authUsername, setAuthUsername] = useState("");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authError, setAuthError] = useState("");
 
   useEffect(() => {
-    try {
-      const savedProfile = localStorage.getItem("shuttlemetrics-player-profile");
-      if (!savedProfile) return;
-
-      const profile = JSON.parse(savedProfile);
-
-      if (typeof profile.playerName === "string" && profile.playerName.trim()) {
-        setPlayerName(profile.playerName);
-      }
-      if (typeof profile.playingLevel === "string") {
-        setPlayingLevel(profile.playingLevel);
-      }
-      if (typeof profile.playingStyle === "string") {
-        setPlayingStyle(profile.playingStyle);
-      }
-    } catch {
-      localStorage.removeItem("shuttlemetrics-player-profile");
+    if (!supabase) {
+      setAuthLoading(false);
+      return;
     }
-  }, []);
+    let alive = true;
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (!alive) return;
+      if (error) setAuthError(error.message);
+      setSession(data.session);
+      setAuthLoading(false);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      if (!nextSession) {
+        setMatches([]);
+        setPlayerName("");
+        setPlayingLevel("Intermediate");
+        setPlayingStyle("Attacking");
+        setProfileImage("");
+      }
+    });
+    return () => {
+      alive = false;
+      listener.subscription.unsubscribe();
+    };
+  }, [supabase]);
 
+  useEffect(() => {
+    if (!supabase || !session?.user) return;
+    let alive = true;
+    (async () => {
+      const user = session.user;
+      const metadataName = typeof user.user_metadata?.username === "string" ? user.user_metadata.username : "";
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("id, username, playing_level, playing_style, profile_image")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (!alive) return;
+      if (profileError) setNotice(`Could not load profile: ${profileError.message}`);
+      if (profile) {
+        const p = profile as ProfileRow;
+        setPlayerName(p.username || metadataName || user.email?.split("@")[0] || "Player");
+        setPlayingLevel(p.playing_level || "Intermediate");
+        setPlayingStyle(p.playing_style || "Attacking");
+        setProfileImage(p.profile_image || "");
+      } else {
+        const username = metadataName || user.email?.split("@")[0] || "Player";
+        setPlayerName(username);
+        const { error: insertError } = await supabase.from("profiles").upsert({
+          id: user.id, username, playing_level: "Intermediate", playing_style: "Attacking", profile_image: null,
+        }, { onConflict: "id" });
+        if (insertError && alive) setNotice(`Could not create profile: ${insertError.message}`);
+      }
+      const { data: rows, error: matchesError } = await supabase
+        .from("matches")
+        .select("id, user_id, opponent, played_at, result, score, unforced, forced, smashes")
+        .eq("user_id", user.id)
+        .order("played_at", { ascending: false });
+      if (!alive) return;
+      if (matchesError) {
+        setNotice(`Could not load match history: ${matchesError.message}`);
+        return;
+      }
+      setMatches(((rows || []) as MatchRow[]).map((m) => ({
+        id: m.id, opponent: m.opponent,
+        date: new Date(m.played_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+        result: m.result, score: m.score, unforced: m.unforced, forced: m.forced, smashes: m.smashes,
+      })));
+    })();
+    return () => { alive = false; };
+  }, [supabase, session?.user?.id]);
+
+  async function handleAuth(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAuthError("");
+    if (!supabase) {
+      setAuthError("Supabase environment variables are missing. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY in Vercel, then redeploy.");
+      return;
+    }
+    if (authMode === "signup" && authUsername.trim().length < 3) {
+      setAuthError("Choose a username with at least 3 characters.");
+      return;
+    }
+    setAuthBusy(true);
+    try {
+      if (authMode === "signup") {
+        const { data, error } = await supabase.auth.signUp({
+          email: authEmail.trim(), password: authPassword,
+          options: { data: { username: authUsername.trim() } },
+        });
+        if (error) throw error;
+        if (data.session) {
+          setSession(data.session);
+          setNotice("Account created. Welcome to ShuttleMetrics!");
+        } else {
+          setAuthError("Account created. Check your email to confirm the account, then log in.");
+          setAuthMode("login");
+        }
+      } else {
+        const { data, error } = await supabase.auth.signInWithPassword({ email: authEmail.trim(), password: authPassword });
+        if (error) throw error;
+        setSession(data.session);
+        setNotice("Welcome back!");
+      }
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Authentication failed. Please try again.");
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function handleSignOut() {
+    if (!supabase) return;
+    const { error } = await supabase.auth.signOut();
+    if (error) setNotice(`Could not sign out: ${error.message}`);
+    else {
+      setSession(null);
+      setActivePage("Home");
+      setNotice("");
+    }
+  }
 
   const totalMatches = matches.length;
   const wins = matches.filter((match) => match.result === "Won").length;
@@ -237,36 +344,40 @@ export default function HomePage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function saveMatch(event: FormEvent<HTMLFormElement>) {
+  async function saveMatch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
+    if (!supabase || !session?.user) {
+      setNotice("Please log in before recording a match.");
+      return;
+    }
     if (!opponent.trim()) {
       setNotice("Please enter your opponent's name.");
       return;
     }
-
-    const newMatch: Match = {
-      id: Date.now(),
+    const row = {
+      user_id: session.user.id,
       opponent: opponent.trim(),
-      date: new Date().toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }),
+      played_at: new Date().toISOString(),
       result: matchResult,
       score: matchScore.trim() || "Score not entered",
       unforced: Math.max(0, Number(unforced) || 0),
       forced: Math.max(0, Number(forced) || 0),
       smashes: Math.max(0, Number(smashes) || 0),
     };
-
+    const { data, error } = await supabase.from("matches").insert(row).select("id, opponent, played_at, result, score, unforced, forced, smashes").single();
+    if (error) {
+      setNotice(`Could not save match: ${error.message}`);
+      return;
+    }
+    const m = data as MatchRow;
+    const newMatch: Match = {
+      id: m.id, opponent: m.opponent,
+      date: new Date(m.played_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+      result: m.result, score: m.score, unforced: m.unforced, forced: m.forced, smashes: m.smashes,
+    };
     setMatches((current) => [newMatch, ...current]);
-    setOpponent("");
-    setMatchScore("");
-    setUnforced("0");
-    setForced("0");
-    setSmashes("0");
-    setNotice("Match added to this session.");
+    setOpponent(""); setMatchScore(""); setUnforced("0"); setForced("0"); setSmashes("0");
+    setNotice("Match saved to your account.");
   }
 
   function runDemoPrediction(event: FormEvent<HTMLFormElement>) {
@@ -566,7 +677,12 @@ export default function HomePage() {
                         setNotice("Please choose an image smaller than 2 MB.");
                         return;
                       }
-                      setProfileImage(URL.createObjectURL(file));
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        const imageData = typeof reader.result === "string" ? reader.result : "";
+                        setProfileImage(imageData);
+                      };
+                      reader.readAsDataURL(file);
                     }
                   }}
                 />
@@ -575,30 +691,29 @@ export default function HomePage() {
           </div>
           <form
             className="form-grid"
-            onSubmit={(event) => {
+            onSubmit={async (event) => {
               event.preventDefault();
-
-              const name = playerName.trim();
-              if (!name) {
-                setNotice("Please enter your player name.");
+              if (!supabase || !session?.user) {
+                setNotice("Please log in before saving your profile.");
                 return;
               }
-
-              const profile = {
-                playerName: name,
-                playingLevel,
-                playingStyle,
-              };
-
-              try {
-                localStorage.setItem(
-                  "shuttlemetrics-player-profile",
-                  JSON.stringify(profile)
-                );
-                setPlayerName(name);
-                setNotice("Profile saved successfully in this browser.");
-              } catch {
-                setNotice("Could not save the profile in this browser. Check browser storage settings.");
+              const username = playerName.trim();
+              if (username.length < 3) {
+                setNotice("Username must contain at least 3 characters.");
+                return;
+              }
+              const { error } = await supabase.from("profiles").upsert({
+                id: session.user.id,
+                username,
+                playing_level: playingLevel,
+                playing_style: playingStyle,
+                profile_image: profileImage || null,
+                updated_at: new Date().toISOString(),
+              }, { onConflict: "id" });
+              if (error) setNotice(`Could not save profile: ${error.message}`);
+              else {
+                await supabase.auth.updateUser({ data: { username } });
+                setNotice("Profile saved to your account.");
               }
             }}
           >
@@ -643,8 +758,7 @@ export default function HomePage() {
             </div>
           </form>
           <p className="form-note">
-            Your player name and playing preferences are saved in this browser.
-            Supabase syncing across devices will be added separately.
+            Your username and playing preferences are saved to your signed-in account. Match history is stored separately and belongs only to this account.
           </p>
         </div>
       </section>
@@ -738,8 +852,7 @@ export default function HomePage() {
             </div>
           </form>
           <p className="form-note">
-            Match records are temporary in this frontend prototype. Supabase
-            persistence will be implemented later.
+            Saved matches remain in your account when you log out and return later. Other users cannot access your records.
           </p>
         </div>
       </section>
@@ -864,7 +977,7 @@ export default function HomePage() {
           <div className="panel-heading">
             <div>
               <h3>All matches</h3>
-              <p>{matches.length} records in this session</p>
+              <p>{matches.length} saved records</p>
             </div>
             <label className="search-field">
               <Search size={16} />
@@ -982,6 +1095,42 @@ export default function HomePage() {
     }
   }
 
+  if (authLoading) {
+    return <div className="auth-screen"><div className="auth-card"><div className="brand-mark"><Activity size={24} /></div><p>Loading your ShuttleMetrics workspace…</p></div><style jsx global>{`.auth-screen{min-height:100vh;display:grid;place-items:center;background:#08111f;color:#e8f0fb;font-family:Arial,sans-serif}.auth-card{width:min(420px,92vw);padding:32px;border:1px solid #26374d;background:#101c2d;border-radius:18px;text-align:center}.auth-card p{color:#aebdd0;font-size:14px}`}</style></div>;
+  }
+
+  if (!session) {
+    return (
+      <div className="auth-screen">
+        <section className="auth-layout">
+          <div className="auth-hero">
+            <span className="auth-eyebrow">BADMINTON PERFORMANCE PLATFORM</span>
+            <h1>Play with purpose.<br />Improve with evidence.</h1>
+            <p>Keep your match history organized, understand your performance trends, and make each training session count.</p>
+            <div className="auth-stats"><div><strong>01</strong><span>Track matches</span></div><div><strong>02</strong><span>Review trends</span></div><div><strong>03</strong><span>Plan training</span></div></div>
+          </div>
+          <div className="auth-form-wrap">
+            <span className="auth-eyebrow">WELCOME TO SHUTTLEMETRICS</span>
+            <h2>Your player workspace</h2>
+            <p className="auth-subtitle">Sign in to continue, or create an account to start your performance log.</p>
+            <div className="auth-tabs"><button className={authMode === "login" ? "selected" : ""} onClick={() => {setAuthMode("login"); setAuthError("");}}>Log in</button><button className={authMode === "signup" ? "selected" : ""} onClick={() => {setAuthMode("signup"); setAuthError("");}}>Create account</button></div>
+            <form className="auth-form" onSubmit={handleAuth}>
+              {authMode === "signup" && <label>Username<input autoComplete="username" value={authUsername} onChange={e => setAuthUsername(e.target.value)} placeholder="Choose a username" minLength={3} maxLength={40} required /></label>}
+              <label>Email<input type="email" autoComplete="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)} placeholder="you@example.com" required /></label>
+              <label>Password<input type="password" autoComplete={authMode === "login" ? "current-password" : "new-password"} value={authPassword} onChange={e => setAuthPassword(e.target.value)} placeholder="At least 6 characters" minLength={6} required /></label>
+              {authError && <p className="auth-error" role="alert">{authError}</p>}
+              <button className="auth-submit" type="submit" disabled={authBusy}>{authBusy ? "Please wait…" : authMode === "login" ? "Log in" : "Create account"}</button>
+            </form>
+            <p className="auth-footer">SHUTTLEMETRICS · PLAYER PERFORMANCE</p>
+          </div>
+        </section>
+        <style jsx global>{`
+.auth-screen{min-height:100vh;background:#08111f;color:#edf3fb;font-family:Arial,Helvetica,sans-serif;display:grid;place-items:center;padding:32px}.auth-layout{width:min(1480px,100%);display:grid;grid-template-columns:1.1fr .9fr;gap:64px;align-items:center}.auth-hero{padding:44px 42px;border:1px solid #29445b;border-radius:22px;background:radial-gradient(circle at 95% 0%,#174b5366,transparent 35%),linear-gradient(135deg,#10283b,#0e2d37);min-height:360px;display:flex;flex-direction:column;justify-content:center}.auth-eyebrow{font-size:10px;letter-spacing:.18em;font-weight:800;color:#22d3c0}.auth-hero h1{font-size:clamp(32px,4vw,54px);line-height:1.1;letter-spacing:-.045em;margin:28px 0 18px}.auth-hero p{max-width:610px;color:#cad7e6;line-height:1.8;font-size:14px}.auth-stats{display:flex;gap:34px;margin-top:22px}.auth-stats div{display:flex;flex-direction:column;gap:7px}.auth-stats strong{font-size:24px}.auth-stats span{font-size:12px;color:#afc5d9}.auth-form-wrap{max-width:560px;width:100%;margin:auto}.auth-form-wrap h2{font-size:clamp(27px,3vw,40px);margin:22px 0 12px;letter-spacing:-.04em}.auth-subtitle{color:#c3d0df;font-size:14px;line-height:1.7;margin-bottom:26px}.auth-tabs{display:flex;border-bottom:1px solid #29394e;margin-bottom:18px}.auth-tabs button{padding:13px 0;margin-right:20px;color:#b9c5d5;background:transparent;border-bottom:2px solid transparent;cursor:pointer}.auth-tabs button.selected{color:#fff;border-color:#1fd0b5}.auth-form{background:#101c2d;border:1px solid #29394e;border-radius:15px;padding:24px;display:flex;flex-direction:column;gap:17px}.auth-form label{display:flex;flex-direction:column;gap:9px;font-size:12px;color:#d5dfeb}.auth-form input{width:100%;box-sizing:border-box;border:1px solid #2a3a50;background:#0c1727;border-radius:9px;padding:13px 12px;color:#fff;outline:none}.auth-form input:focus{border-color:#22c9b4}.auth-submit{padding:14px;border:0;border-radius:9px;background:#17b9a5;color:#06231f;font-weight:800;cursor:pointer}.auth-submit:disabled{opacity:.65;cursor:wait}.auth-error{background:#46232b;color:#ffd4d7;border-radius:8px;padding:11px;font-size:12px;line-height:1.5}.auth-footer{font-size:10px;color:#7891ac;margin-top:24px}.app-shell .button-outline{cursor:pointer}@media(max-width:900px){.auth-layout{grid-template-columns:1fr;gap:28px}.auth-hero{min-height:auto;padding:30px}.auth-form-wrap{max-width:620px}.auth-screen{padding:20px}.auth-stats{gap:20px}}@media(max-width:480px){.auth-stats{gap:14px}.auth-hero h1{font-size:31px}.auth-form{padding:18px}}
+        `}</style>
+      </div>
+    );
+  }
+
   return (
     <div className="app-shell">
       <aside className={`sidebar ${mobileMenuOpen ? "sidebar-open" : ""}`}>
@@ -1097,6 +1246,7 @@ export default function HomePage() {
               <span>{playerName}</span>
               <ChevronRight size={14} />
             </button>
+            <button className="button-outline" onClick={handleSignOut} title="Sign out of ShuttleMetrics">Sign out</button>
           </div>
         </header>
 
