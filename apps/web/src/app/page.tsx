@@ -67,6 +67,12 @@ type MatchRow = {
   smashes: number;
 };
 
+const demoMatches: Match[] = [
+  { id: "demo-1", opponent: "Arjun R.", date: "Oct 17, 2026", result: "Won", score: "21–17, 21–14", unforced: 8, forced: 12, smashes: 15 },
+  { id: "demo-2", opponent: "Kiran M.", date: "Oct 15, 2026", result: "Won", score: "21–19, 18–21, 21–16", unforced: 11, forced: 14, smashes: 12 },
+  { id: "demo-3", opponent: "Rahul S.", date: "Oct 12, 2026", result: "Lost", score: "17–21, 16–21", unforced: 16, forced: 9, smashes: 8 },
+];
+
 function getSupabase(): SupabaseClient | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -188,6 +194,7 @@ export default function HomePage() {
   const [search, setSearch] = useState("");
   const [supabase] = useState<SupabaseClient | null>(() => getSupabase());
   const [session, setSession] = useState<Session | null>(null);
+  const [demoMode, setDemoMode] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [authUsername, setAuthUsername] = useState("");
@@ -270,9 +277,26 @@ export default function HomePage() {
     return () => { alive = false; };
   }, [supabase, session?.user?.id]);
 
+  function handleDemoLogin() {
+    setDemoMode(true);
+    setSession(null);
+    setPlayerName("Demo Player");
+    setPlayingLevel("Intermediate");
+    setPlayingStyle("Attacking");
+    setProfileImage("");
+    setMatches(demoMatches);
+    setActivePage("Home");
+    setNotice("Demo workspace: sample data only. Changes are not saved.");
+    setAuthError("");
+  }
+
   async function handleAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setAuthError("");
+    if (authMode === "login" && authEmail.trim().toLowerCase() === "demo@shuttlemetrics.app" && authPassword === "ShuttleDemo2026!") {
+      handleDemoLogin();
+      return;
+    }
     if (!supabase) {
       setAuthError("Supabase environment variables are missing. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY in Vercel, then redeploy.");
       return;
@@ -310,6 +334,14 @@ export default function HomePage() {
   }
 
   async function handleSignOut() {
+    if (demoMode) {
+      setDemoMode(false);
+      setMatches([]);
+      setPlayerName("");
+      setNotice("");
+      setActivePage("Home");
+      return;
+    }
     if (!supabase) return;
     const { error } = await supabase.auth.signOut();
     if (error) setNotice(`Could not sign out: ${error.message}`);
@@ -346,6 +378,10 @@ export default function HomePage() {
 
   async function saveMatch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (demoMode) {
+      setNotice("Demo mode is read-only. Log in with your own account to save match history.");
+      return;
+    }
     if (!supabase || !session?.user) {
       setNotice("Please log in before recording a match.");
       return;
@@ -693,6 +729,10 @@ export default function HomePage() {
             className="form-grid"
             onSubmit={async (event) => {
               event.preventDefault();
+              if (demoMode) {
+                setNotice("Demo mode is read-only. Log in with your own account to save profile changes.");
+                return;
+              }
               if (!supabase || !session?.user) {
                 setNotice("Please log in before saving your profile.");
                 return;
@@ -1099,7 +1139,7 @@ export default function HomePage() {
     return <div className="auth-screen"><div className="auth-card"><div className="brand-mark"><Activity size={24} /></div><p>Loading your ShuttleMetrics workspace…</p></div><style jsx global>{`.auth-screen{min-height:100vh;display:grid;place-items:center;background:#08111f;color:#e8f0fb;font-family:Arial,sans-serif}.auth-card{width:min(420px,92vw);padding:32px;border:1px solid #26374d;background:#101c2d;border-radius:18px;text-align:center}.auth-card p{color:#aebdd0;font-size:14px}`}</style></div>;
   }
 
-  if (!session) {
+  if (!session && !demoMode) {
     return (
       <div className="auth-screen">
         <section className="auth-layout">
@@ -1113,19 +1153,28 @@ export default function HomePage() {
             <span className="auth-eyebrow">WELCOME TO SHUTTLEMETRICS</span>
             <h2>Your player workspace</h2>
             <p className="auth-subtitle">Sign in to continue, or create an account to start your performance log.</p>
-            <div className="auth-tabs"><button className={authMode === "login" ? "selected" : ""} onClick={() => {setAuthMode("login"); setAuthError("");}}>Log in</button><button className={authMode === "signup" ? "selected" : ""} onClick={() => {setAuthMode("signup"); setAuthError("");}}>Create account</button></div>
+            <div className="auth-tabs" role="tablist" aria-label="Account access">
+              <button type="button" role="tab" aria-selected={authMode === "login"} className={authMode === "login" ? "selected" : ""} onClick={() => {setAuthMode("login"); setAuthError("");}}>Log in</button>
+              <button type="button" role="tab" aria-selected={authMode === "signup"} className={authMode === "signup" ? "selected" : ""} onClick={() => {setAuthMode("signup"); setAuthError("");}}>Create account</button>
+            </div>
             <form className="auth-form" onSubmit={handleAuth}>
               {authMode === "signup" && <label>Username<input autoComplete="username" value={authUsername} onChange={e => setAuthUsername(e.target.value)} placeholder="Choose a username" minLength={3} maxLength={40} required /></label>}
               <label>Email<input type="email" autoComplete="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)} placeholder="you@example.com" required /></label>
               <label>Password<input type="password" autoComplete={authMode === "login" ? "current-password" : "new-password"} value={authPassword} onChange={e => setAuthPassword(e.target.value)} placeholder="At least 6 characters" minLength={6} required /></label>
               {authError && <p className="auth-error" role="alert">{authError}</p>}
-              <button className="auth-submit" type="submit" disabled={authBusy}>{authBusy ? "Please wait…" : authMode === "login" ? "Log in" : "Create account"}</button>
+              <button className="auth-submit" type="submit" disabled={authBusy}>{authBusy ? "Please wait…" : authMode === "login" ? "Log in to workspace" : "Create your account"}<ArrowRight size={17} /></button>
             </form>
+            <div className="demo-access">
+              <div className="demo-access-heading"><span className="demo-access-icon"><Sparkles size={16} /></span><div><strong>Just looking around?</strong><small>Explore with sample matches. No account needed.</small></div></div>
+              <div className="demo-credentials"><span><b>Email</b> demo@shuttlemetrics.app</span><button type="button" onClick={() => {setAuthMode("login");setAuthEmail("demo@shuttlemetrics.app");setAuthPassword("ShuttleDemo2026!");setAuthError("");}}>Use demo login</button></div>
+              <div className="demo-password"><b>Password</b> ShuttleDemo2026!</div>
+              <p>Demo mode is read-only. Your own matches stay private in your account.</p>
+            </div>
             <p className="auth-footer">SHUTTLEMETRICS · PLAYER PERFORMANCE</p>
           </div>
         </section>
         <style jsx global>{`
-.auth-screen{min-height:100vh;background:#08111f;color:#edf3fb;font-family:Arial,Helvetica,sans-serif;display:grid;place-items:center;padding:32px}.auth-layout{width:min(1480px,100%);display:grid;grid-template-columns:1.1fr .9fr;gap:64px;align-items:center}.auth-hero{padding:44px 42px;border:1px solid #29445b;border-radius:22px;background:radial-gradient(circle at 95% 0%,#174b5366,transparent 35%),linear-gradient(135deg,#10283b,#0e2d37);min-height:360px;display:flex;flex-direction:column;justify-content:center}.auth-eyebrow{font-size:10px;letter-spacing:.18em;font-weight:800;color:#22d3c0}.auth-hero h1{font-size:clamp(32px,4vw,54px);line-height:1.1;letter-spacing:-.045em;margin:28px 0 18px}.auth-hero p{max-width:610px;color:#cad7e6;line-height:1.8;font-size:14px}.auth-stats{display:flex;gap:34px;margin-top:22px}.auth-stats div{display:flex;flex-direction:column;gap:7px}.auth-stats strong{font-size:24px}.auth-stats span{font-size:12px;color:#afc5d9}.auth-form-wrap{max-width:560px;width:100%;margin:auto}.auth-form-wrap h2{font-size:clamp(27px,3vw,40px);margin:22px 0 12px;letter-spacing:-.04em}.auth-subtitle{color:#c3d0df;font-size:14px;line-height:1.7;margin-bottom:26px}.auth-tabs{display:flex;border-bottom:1px solid #29394e;margin-bottom:18px}.auth-tabs button{padding:13px 0;margin-right:20px;color:#b9c5d5;background:transparent;border-bottom:2px solid transparent;cursor:pointer}.auth-tabs button.selected{color:#fff;border-color:#1fd0b5}.auth-form{background:#101c2d;border:1px solid #29394e;border-radius:15px;padding:24px;display:flex;flex-direction:column;gap:17px}.auth-form label{display:flex;flex-direction:column;gap:9px;font-size:12px;color:#d5dfeb}.auth-form input{width:100%;box-sizing:border-box;border:1px solid #2a3a50;background:#0c1727;border-radius:9px;padding:13px 12px;color:#fff;outline:none}.auth-form input:focus{border-color:#22c9b4}.auth-submit{padding:14px;border:0;border-radius:9px;background:#17b9a5;color:#06231f;font-weight:800;cursor:pointer}.auth-submit:disabled{opacity:.65;cursor:wait}.auth-error{background:#46232b;color:#ffd4d7;border-radius:8px;padding:11px;font-size:12px;line-height:1.5}.auth-footer{font-size:10px;color:#7891ac;margin-top:24px}.app-shell .button-outline{cursor:pointer}@media(max-width:900px){.auth-layout{grid-template-columns:1fr;gap:28px}.auth-hero{min-height:auto;padding:30px}.auth-form-wrap{max-width:620px}.auth-screen{padding:20px}.auth-stats{gap:20px}}@media(max-width:480px){.auth-stats{gap:14px}.auth-hero h1{font-size:31px}.auth-form{padding:18px}}
+.auth-screen{min-height:100vh;background:#08111f;color:#edf3fb;font-family:Arial,Helvetica,sans-serif;display:grid;place-items:center;padding:32px}.auth-layout{width:min(1480px,100%);display:grid;grid-template-columns:1.1fr .9fr;gap:64px;align-items:center}.auth-hero{padding:44px 42px;border:1px solid #29445b;border-radius:22px;background:radial-gradient(circle at 95% 0%,#174b5366,transparent 35%),linear-gradient(135deg,#10283b,#0e2d37);min-height:360px;display:flex;flex-direction:column;justify-content:center}.auth-eyebrow{font-size:10px;letter-spacing:.18em;font-weight:800;color:#22d3c0}.auth-hero h1{font-size:clamp(32px,4vw,54px);line-height:1.1;letter-spacing:-.045em;margin:28px 0 18px}.auth-hero p{max-width:610px;color:#cad7e6;line-height:1.8;font-size:14px}.auth-stats{display:flex;gap:34px;margin-top:22px}.auth-stats div{display:flex;flex-direction:column;gap:7px}.auth-stats strong{font-size:24px}.auth-stats span{font-size:12px;color:#afc5d9}.auth-form-wrap{max-width:560px;width:100%;margin:auto}.auth-form-wrap h2{font-size:clamp(27px,3vw,40px);margin:22px 0 12px;letter-spacing:-.04em}.auth-subtitle{color:#c3d0df;font-size:14px;line-height:1.7;margin-bottom:26px}.auth-tabs{display:grid;grid-template-columns:1fr 1fr;gap:5px;padding:5px;background:#0b1626;border:1px solid #29394e;border-radius:12px;margin-bottom:18px}.auth-tabs button{appearance:none;display:flex;align-items:center;justify-content:center;min-height:42px;padding:10px 14px;margin:0;border:1px solid transparent;border-radius:8px;color:#b9c5d5;background:transparent;font-family:inherit;font-size:13px;font-weight:600;line-height:1.2;cursor:pointer;transition:background .18s,color .18s,box-shadow .18s}.auth-tabs button:hover{background:#17273b;color:#fff}.auth-tabs button.selected{background:#1fd0b5;color:#06231f;border-color:#50e3cf;box-shadow:0 3px 12px #1fd0b522;font-weight:800}.auth-form{background:#101c2d;border:1px solid #29394e;border-radius:15px;padding:24px;display:flex;flex-direction:column;gap:17px}.auth-form label{display:flex;flex-direction:column;gap:9px;font-size:12px;color:#d5dfeb}.auth-form input{width:100%;box-sizing:border-box;border:1px solid #2a3a50;background:#0c1727;border-radius:9px;padding:13px 12px;color:#fff;outline:none}.auth-form input:focus{border-color:#22c9b4}.auth-submit{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:49px;padding:14px 18px;border:1px solid #35d5c2;border-radius:10px;background:linear-gradient(135deg,#20c9b3,#11a997);color:#052b27;font-weight:800;letter-spacing:.005em;cursor:pointer;box-shadow:0 7px 18px #17b9a51e;transition:transform .18s,box-shadow .18s,filter .18s}.auth-submit:hover:not(:disabled){transform:translateY(-1px);filter:brightness(1.04);box-shadow:0 10px 22px #17b9a52b}.auth-submit:active:not(:disabled){transform:translateY(0)}.auth-submit:disabled{opacity:.65;cursor:wait}.auth-form button:focus-visible,.auth-tabs button:focus-visible,.demo-access button:focus-visible{outline:3px solid #8ff8e8;outline-offset:3px}.demo-access{margin-top:14px;padding:15px;border:1px solid #2a4056;border-radius:13px;background:linear-gradient(135deg,#101f31,#0d1a2b)}.demo-access-heading{display:flex;align-items:center;gap:10px;margin-bottom:12px}.demo-access-icon{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;background:#1c3c4c;color:#7cf0df;flex-shrink:0}.demo-access-heading>div{display:flex;flex-direction:column;gap:3px}.demo-access-heading strong{font-size:12px;color:#edf6ff}.demo-access-heading small{font-size:10px;line-height:1.5;color:#a7bad0}.demo-credentials{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 11px;border:1px solid #2b4057;border-radius:9px;background:#0a1524}.demo-credentials span,.demo-password{font-size:11px;color:#c6d5e5;overflow-wrap:anywhere}.demo-credentials span{display:flex;flex-direction:column;gap:4px}.demo-credentials b,.demo-password b{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#8da5be}.demo-credentials button{flex-shrink:0;padding:8px 10px;border:1px solid #2c8d83;border-radius:8px;background:#123b3c;color:#a5fff1;font-size:10px;font-weight:800;cursor:pointer;transition:background .15s}.demo-credentials button:hover{background:#185250}.demo-password{margin-top:9px;display:flex;flex-direction:column;gap:4px}.demo-access>p{font-size:10px;line-height:1.55;color:#8fa5bc;margin:10px 0 0}.demo-mode-banner{display:flex;align-items:center;gap:9px;padding:11px 14px;margin-bottom:17px;border:1px solid #f2d8a0;border-radius:10px;background:#fff8e8;color:#805b14;font-size:12px}.demo-mode-banner strong{font-weight:800}.demo-mode-banner span{flex:1}.auth-error{background:#46232b;color:#ffd4d7;border-radius:8px;padding:11px;font-size:12px;line-height:1.5}.auth-footer{font-size:10px;color:#7891ac;margin-top:24px}.app-shell .button-outline{cursor:pointer}@media(max-width:900px){.auth-layout{grid-template-columns:1fr;gap:28px}.auth-hero{min-height:auto;padding:30px}.auth-form-wrap{max-width:620px}.auth-screen{padding:20px}.auth-stats{gap:20px}}@media(max-width:480px){.auth-stats{gap:14px}.auth-hero h1{font-size:31px}.auth-form{padding:18px}}
         `}</style>
       </div>
     );
@@ -1246,11 +1295,12 @@ export default function HomePage() {
               <span>{playerName}</span>
               <ChevronRight size={14} />
             </button>
-            <button className="button-outline" onClick={handleSignOut} title="Sign out of ShuttleMetrics">Sign out</button>
+            <button className="button-outline" onClick={handleSignOut} title={demoMode ? "Exit demo workspace" : "Sign out of ShuttleMetrics"}>{demoMode ? "Exit demo" : "Sign out"}</button>
           </div>
         </header>
 
         <div className="page-content">
+          {demoMode && <div className="demo-mode-banner"><Sparkles size={16} /><span><strong>Demo workspace</strong> — sample data only; changes are not saved.</span><button className="notice-close" onClick={handleSignOut} aria-label="Exit demo"><X size={16} /></button></div>}
           <div className="mobile-page-title">
             <span className="eyebrow">PLAYER WORKSPACE</span>
             <h1>{activePage === "Home" ? "Good game starts here." : activePage}</h1>
