@@ -66,6 +66,50 @@ def players() -> dict[str, list[str]]:
     return {"players": sorted(bundle["player_history"].keys())}
 
 
+
+@app.get("/recommendations")
+def recommendations(player: str) -> dict[str, Any]:
+    """Rank historical players for three matchup goals using existing model history."""
+    bundle = get_bundle()
+    history = bundle["player_history"]
+    selected = player.strip()
+    if selected not in history:
+        raise HTTPException(status_code=422, detail=f"{selected} is not in the model's historical player list.")
+
+    def stats(name: str) -> dict[str, Any]:
+        row = history[name]
+        win_rate = row["wins"] / row["played"] if row["played"] else 0.5
+        recent_form = sum(row["recent"]) / len(row["recent"]) if row["recent"] else 0.5
+        # Equal weighting keeps the recommendation interpretable and uses only existing history.
+        strength = (win_rate + recent_form) / 2
+        return {
+            "name": name,
+            "previous_win_rate": round(float(win_rate) * 100, 1),
+            "recent_form": round(float(recent_form) * 100, 1),
+            "strength_score": round(float(strength) * 100, 1),
+        }
+
+    base = stats(selected)
+    others = [stats(name) for name in history if name != selected]
+    own_score = base["strength_score"]
+    competitive = sorted(others, key=lambda item: (abs(item["strength_score"] - own_score), item["name"]))[:3]
+    favorable = sorted(
+        [item for item in others if item["strength_score"] < own_score],
+        key=lambda item: (own_score - item["strength_score"], item["name"]),
+    )[:3]
+    challenging = sorted(
+        [item for item in others if item["strength_score"] > own_score],
+        key=lambda item: (item["strength_score"] - own_score, item["name"]),
+    )[:3]
+    return {
+        "player": base,
+        "competitive": competitive,
+        "favorable": favorable,
+        "challenging": challenging,
+        "method": "Historical previous win rate and recent form, equally weighted. Recommendations are descriptive, not guarantees.",
+    }
+
+
 @app.post("/predict")
 def predict(request: PredictionRequest) -> dict[str, Any]:
     bundle = get_bundle()
