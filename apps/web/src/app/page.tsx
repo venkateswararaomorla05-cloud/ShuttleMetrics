@@ -434,7 +434,10 @@ export default function HomePage() {
     setNotice("Match saved to your account.");
   }
 
-  const predictionApiUrl = process.env.NEXT_PUBLIC_PREDICTION_API_URL?.replace(/\/$/, "");
+  const rawPredictionApiUrl = process.env.NEXT_PUBLIC_PREDICTION_API_URL || "";
+  const predictionApiUrl = rawPredictionApiUrl.endsWith("/")
+    ? rawPredictionApiUrl.slice(0, -1)
+    : rawPredictionApiUrl;
 
   useEffect(() => {
     if (!predictionApiUrl) {
