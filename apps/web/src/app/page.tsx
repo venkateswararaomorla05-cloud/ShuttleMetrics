@@ -465,8 +465,11 @@ export default function HomePage() {
   }, [predictionApiUrl]);
 
   useEffect(() => {
-    if (!predictionApiUrl || !playerOne) {
+    // Only request matchup recommendations for a complete player name from the historical dataset.
+    // While the user types a partial name, the datalist below offers matching dataset names.
+    if (!predictionApiUrl || !playerOne || !predictionPlayers.includes(playerOne)) {
       setRecommendations(null);
+      setRecommendationsLoading(false);
       return;
     }
     let active = true;
@@ -481,7 +484,7 @@ export default function HomePage() {
       .catch(() => { if (active) setRecommendations(null); })
       .finally(() => { if (active) setRecommendationsLoading(false); });
     return () => { active = false; };
-  }, [predictionApiUrl, playerOne]);
+  }, [predictionApiUrl, playerOne, predictionPlayers]);
 
   async function runDemoPrediction(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1154,16 +1157,33 @@ export default function HomePage() {
           <form onSubmit={runDemoPrediction} className="form-grid">
             <label className="field">
               <span>Player 1</span>
-              <select value={playerOne} onChange={(event) => { setPlayerOne(event.target.value); setPrediction(false); setPredictionResult(null); }} required disabled={!predictionPlayers.length || predictionLoading}>
-                {predictionPlayers.length ? predictionPlayers.map((name) => <option key={name} value={name}>{name}</option>) : <option value="">Loading model players…</option>}
-              </select>
+              <input
+                list="historical-player-names"
+                value={playerOne}
+                onChange={(event) => { setPlayerOne(event.target.value); setPrediction(false); setPredictionResult(null); }}
+                placeholder={predictionPlayers.length ? "Start typing a player name…" : "Loading historical players…"}
+                autoComplete="off"
+                required
+                disabled={!predictionPlayers.length || predictionLoading}
+              />
+              <small>Type to see matching names from the historical dataset.</small>
             </label>
             <label className="field">
               <span>Player 2</span>
-              <select value={playerTwo} onChange={(event) => { setPlayerTwo(event.target.value); setPrediction(false); setPredictionResult(null); }} required disabled={!predictionPlayers.length || predictionLoading}>
-                {predictionPlayers.length ? predictionPlayers.map((name) => <option key={name} value={name}>{name}</option>) : <option value="">Loading model players…</option>}
-              </select>
+              <input
+                list="historical-player-names"
+                value={playerTwo}
+                onChange={(event) => { setPlayerTwo(event.target.value); setPrediction(false); setPredictionResult(null); }}
+                placeholder={predictionPlayers.length ? "Start typing a player name…" : "Loading historical players…"}
+                autoComplete="off"
+                required
+                disabled={!predictionPlayers.length || predictionLoading}
+              />
+              <small>Choose a name that appears in the dataset suggestions.</small>
             </label>
+            <datalist id="historical-player-names">
+              {predictionPlayers.map((name) => <option key={name} value={name} />}
+            </datalist>
             <div className="full-width form-actions">
               <button type="submit" className="button-primary" disabled={predictionLoading || predictionPlayers.length < 2}>
                 {predictionLoading ? "Calculating…" : "Run real prediction"} <ArrowRight size={16} />
