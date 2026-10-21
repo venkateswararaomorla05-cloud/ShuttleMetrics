@@ -1185,7 +1185,7 @@ export default function HomePage() {
               <small>Choose a name that appears in the dataset suggestions.</small>
             </label>
             <datalist id="historical-player-names">
-              {predictionPlayers.map((name) => <option key={name} value={name} />}
+              {predictionPlayers.map((name) => <option key={name} value={name} />)}
             </datalist>
             <div className="full-width form-actions">
               <button type="submit" className="button-primary" disabled={predictionLoading || predictionPlayers.length < 2}>
