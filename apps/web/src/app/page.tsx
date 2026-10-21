@@ -434,7 +434,7 @@ export default function HomePage() {
     setNotice("Match saved to your account.");
   }
 
-  const predictionApiUrl = process.env.NEXT_PUBLIC_PREDICTION_API_URL?.replace(/\\/$/, "");
+  const predictionApiUrl = process.env.NEXT_PUBLIC_PREDICTION_API_URL?.replace(/\/$/, "");
 
   useEffect(() => {
     if (!predictionApiUrl) {
