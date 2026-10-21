@@ -193,6 +193,14 @@ export default function HomePage() {
   const [prediction, setPrediction] = useState(false);
   const [predictionPlayers, setPredictionPlayers] = useState<string[]>([]);
   const [predictionLoading, setPredictionLoading] = useState(false);
+  const [recommendations, setRecommendations] = useState<null | {
+    player: { name: string; previous_win_rate: number; recent_form: number; strength_score: number };
+    competitive: Array<{ name: string; previous_win_rate: number; recent_form: number; strength_score: number }>;
+    favorable: Array<{ name: string; previous_win_rate: number; recent_form: number; strength_score: number }>;
+    challenging: Array<{ name: string; previous_win_rate: number; recent_form: number; strength_score: number }>;
+    method: string;
+  }>(null);
+  const [recommendationsLoading, setRecommendationsLoading] = useState(false);
   const [predictionError, setPredictionError] = useState("");
   const [predictionResult, setPredictionResult] = useState<null | {
     player1: string; player2: string; predicted_winner: string;
@@ -455,6 +463,25 @@ export default function HomePage() {
       });
     return () => { active = false; };
   }, [predictionApiUrl]);
+
+  useEffect(() => {
+    if (!predictionApiUrl || !playerOne) {
+      setRecommendations(null);
+      return;
+    }
+    let active = true;
+    setRecommendationsLoading(true);
+    fetch(`${predictionApiUrl}/recommendations?player=${encodeURIComponent(playerOne)}`)
+      .then(async (response) => {
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.detail || "Could not load player recommendations.");
+        return body as NonNullable<typeof recommendations>;
+      })
+      .then((body) => { if (active) setRecommendations(body); })
+      .catch(() => { if (active) setRecommendations(null); })
+      .finally(() => { if (active) setRecommendationsLoading(false); });
+    return () => { active = false; };
+  }, [predictionApiUrl, playerOne]);
 
   async function runDemoPrediction(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1143,6 +1170,46 @@ export default function HomePage() {
               </button>
             </div>
           </form>
+          {playerOne && (
+            <section className="panel" style={{ marginTop: 18, padding: 22 }}>
+              <div className="panel-heading">
+                <div>
+                  <span className="eyebrow">SMART MATCHUP SUGGESTIONS</span>
+                  <h3 style={{ marginTop: 8 }}>Who should {playerOne} play?</h3>
+                  <p>Recommendations use the model's historical win rates and recent form.</p>
+                </div>
+                <div className="metric-icon teal"><Sparkles size={19} /></div>
+              </div>
+              {recommendationsLoading && <p role="status">Finding historical matchups…</p>}
+              {!recommendationsLoading && recommendations && (
+                <div className="form-grid" style={{ marginTop: 16 }}>
+                  {([
+                    ["competitive", "Competitive matchups", "Players with similar historical strength", Target],
+                    ["favorable", "Favorable matchups", "Opponents with lower historical strength", TrendingUp],
+                    ["challenging", "Challenging matchups", "Opponents with higher historical strength", Zap],
+                  ] as const).map(([key, title, description, Icon]) => (
+                    <div key={key} className="panel" style={{ padding: 16 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <Icon size={18} />
+                        <strong>{title}</strong>
+                      </div>
+                      <p style={{ fontSize: 12, color: "var(--muted, #64748b)", margin: "7px 0 12px" }}>{description}</p>
+                      {recommendations[key].length ? recommendations[key].map((item) => (
+                        <div key={item.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 0", borderTop: "1px solid var(--border, #e2e8f0)" }}>
+                          <div style={{ minWidth: 0 }}>
+                            <strong style={{ display: "block", fontSize: 13, overflowWrap: "anywhere" }}>{item.name}</strong>
+                            <span style={{ display: "block", fontSize: 11, color: "var(--muted, #64748b)", marginTop: 4 }}>Win rate {item.previous_win_rate.toFixed(1)}% · Recent form {item.recent_form.toFixed(1)}%</span>
+                          </div>
+                          <button type="button" className="button-outline" style={{ whiteSpace: "nowrap", padding: "8px 10px", fontSize: 12 }} onClick={() => { setPlayerTwo(item.name); setPrediction(false); setPredictionResult(null); setPredictionError(""); }}>Select</button>
+                        </div>
+                      )) : <p style={{ fontSize: 12 }}>Not enough historical data for this category.</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {recommendations && <p style={{ color: "var(--muted, #64748b)", fontSize: 11, marginTop: 12 }}>{recommendations.method}</p>}
+            </section>
+          )}
           {predictionError && (
             <div className="demo-notice">
               <CircleHelp size={20} />
