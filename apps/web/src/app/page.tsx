@@ -191,6 +191,24 @@ export default function HomePage() {
   const [playerOne, setPlayerOne] = useState("");
   const [playerTwo, setPlayerTwo] = useState("");
   const [prediction, setPrediction] = useState(false);
+  const [predictionPlayers, setPredictionPlayers] = useState<string[]>([]);
+  const [predictionLoading, setPredictionLoading] = useState(false);
+  const [recommendations, setRecommendations] = useState<null | {
+    player: { name: string; previous_win_rate: number; recent_form: number; strength_score: number };
+    competitive: Array<{ name: string; previous_win_rate: number; recent_form: number; strength_score: number }>;
+    favorable: Array<{ name: string; previous_win_rate: number; recent_form: number; strength_score: number }>;
+    challenging: Array<{ name: string; previous_win_rate: number; recent_form: number; strength_score: number }>;
+    method: string;
+  }>(null);
+  const [recommendationsLoading, setRecommendationsLoading] = useState(false);
+  const [predictionError, setPredictionError] = useState("");
+  const [predictionResult, setPredictionResult] = useState<null | {
+    player1: string; player2: string; predicted_winner: string;
+    confidence_percent: number | null;
+    player1_previous_win_rate: number; player2_previous_win_rate: number;
+    player1_recent_form: number; player2_recent_form: number;
+    head_to_head_player1_win_rate: number; disclaimer: string;
+  }>(null);
   const [search, setSearch] = useState("");
   const [supabase] = useState<SupabaseClient | null>(() => getSupabase());
   const [session, setSession] = useState<Session | null>(null);
@@ -416,18 +434,92 @@ export default function HomePage() {
     setNotice("Match saved to your account.");
   }
 
-  function runDemoPrediction(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  const rawPredictionApiUrl = process.env.NEXT_PUBLIC_PREDICTION_API_URL || "";
+  const predictionApiUrl = rawPredictionApiUrl.endsWith("/")
+    ? rawPredictionApiUrl.slice(0, -1)
+    : rawPredictionApiUrl;
 
-    if (!playerOne.trim() || !playerTwo.trim()) {
-      setNotice("Enter both player names to continue.");
+  useEffect(() => {
+    if (!predictionApiUrl) {
+      setPredictionError("Prediction service is not configured yet. Deploy the Python API and add NEXT_PUBLIC_PREDICTION_API_URL in Vercel.");
+      return;
+    }
+    let active = true;
+    fetch(`${predictionApiUrl}/players`)
+      .then(async (response) => {
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.detail || "Could not load historical players.");
+        return body as { players?: string[] };
+      })
+      .then((body) => {
+        if (!active) return;
+        const names = Array.isArray(body.players) ? body.players : [];
+        setPredictionPlayers(names);
+        setPredictionError(names.length ? "" : "The model did not provide a player list.");
+        if (names.length >= 2) {
+          setPlayerOne((current) => current && names.includes(current) ? current : names[0]);
+          setPlayerTwo((current) => current && names.includes(current) && current !== names[0] ? current : names[1]);
+        }
+      })
+      .catch((error) => {
+        if (active) setPredictionError(error instanceof Error ? error.message : "Could not connect to the prediction service.");
+      });
+    return () => { active = false; };
+  }, [predictionApiUrl]);
+
+  useEffect(() => {
+    // Only request matchup recommendations for a complete player name from the historical dataset.
+    // While the user types a partial name, the datalist below offers matching dataset names.
+    if (!predictionApiUrl || !playerOne || !predictionPlayers.includes(playerOne)) {
+      setRecommendations(null);
+      setRecommendationsLoading(false);
+      return;
+    }
+    let active = true;
+    setRecommendationsLoading(true);
+    fetch(`${predictionApiUrl}/recommendations?player=${encodeURIComponent(playerOne)}`)
+      .then(async (response) => {
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.detail || "Could not load player recommendations.");
+        return body as NonNullable<typeof recommendations>;
+      })
+      .then((body) => { if (active) setRecommendations(body); })
+      .catch(() => { if (active) setRecommendations(null); })
+      .finally(() => { if (active) setRecommendationsLoading(false); });
+    return () => { active = false; };
+  }, [predictionApiUrl, playerOne, predictionPlayers]);
+
+  async function runDemoPrediction(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPrediction(false);
+    setPredictionResult(null);
+    setPredictionError("");
+
+    if (!predictionApiUrl) {
+      setPredictionError("Prediction service is not configured. Deploy the Python API and add NEXT_PUBLIC_PREDICTION_API_URL in Vercel.");
+      return;
+    }
+    if (!playerOne || !playerTwo || playerOne === playerTwo) {
+      setPredictionError("Choose two different players from the model's historical player list.");
       return;
     }
 
-    setPrediction(true);
-    setNotice(
-      "Demo only: the Python prediction API is not connected yet. No real prediction was calculated.",
-    );
+    setPredictionLoading(true);
+    try {
+      const response = await fetch(`${predictionApiUrl}/predict`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ player1: playerOne, player2: playerTwo }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.detail || "Prediction failed.");
+      setPredictionResult(body);
+      setPrediction(true);
+    } catch (error) {
+      setPredictionError(error instanceof Error ? error.message : "Could not calculate the prediction.");
+    } finally {
+      setPredictionLoading(false);
+    }
   }
 
   function renderHome() {
@@ -1069,38 +1161,93 @@ export default function HomePage() {
             <label className="field">
               <span>Player 1</span>
               <input
+                list="historical-player-names"
                 value={playerOne}
-                onChange={(event) => setPlayerOne(event.target.value)}
-                placeholder="First player"
-                maxLength={80}
+                onChange={(event) => { setPlayerOne(event.target.value); setPrediction(false); setPredictionResult(null); }}
+                placeholder={predictionPlayers.length ? "Start typing a player name…" : "Loading historical players…"}
+                autoComplete="off"
                 required
+                disabled={!predictionPlayers.length || predictionLoading}
               />
+              <small>Type to see matching names from the historical dataset.</small>
             </label>
             <label className="field">
               <span>Player 2</span>
               <input
+                list="historical-player-names"
                 value={playerTwo}
-                onChange={(event) => setPlayerTwo(event.target.value)}
-                placeholder="Second player"
-                maxLength={80}
+                onChange={(event) => { setPlayerTwo(event.target.value); setPrediction(false); setPredictionResult(null); }}
+                placeholder={predictionPlayers.length ? "Start typing a player name…" : "Loading historical players…"}
+                autoComplete="off"
                 required
+                disabled={!predictionPlayers.length || predictionLoading}
               />
+              <small>Choose a name that appears in the dataset suggestions.</small>
             </label>
+            <datalist id="historical-player-names">
+              {predictionPlayers.map((name) => <option key={name} value={name} />)}
+            </datalist>
             <div className="full-width form-actions">
-              <button type="submit" className="button-primary">
-                Prepare prediction <ArrowRight size={16} />
+              <button type="submit" className="button-primary" disabled={predictionLoading || predictionPlayers.length < 2}>
+                {predictionLoading ? "Calculating…" : "Run real prediction"} <ArrowRight size={16} />
               </button>
             </div>
           </form>
-          {prediction && (
+          {playerOne && (
+            <section className="panel" style={{ marginTop: 18, padding: 22 }}>
+              <div className="panel-heading">
+                <div>
+                  <span className="eyebrow">SMART MATCHUP SUGGESTIONS</span>
+                  <h3 style={{ marginTop: 8 }}>Who should {playerOne} play?</h3>
+                  <p>Recommendations use the model's historical win rates and recent form.</p>
+                </div>
+                <div className="metric-icon teal"><Sparkles size={19} /></div>
+              </div>
+              {recommendationsLoading && <p role="status">Finding historical matchups…</p>}
+              {!recommendationsLoading && recommendations && (
+                <div className="form-grid" style={{ marginTop: 16 }}>
+                  {([
+                    ["competitive", "Competitive matchups", "Players with similar historical strength", Target],
+                    ["favorable", "Favorable matchups", "Opponents with lower historical strength", TrendingUp],
+                    ["challenging", "Challenging matchups", "Opponents with higher historical strength", Zap],
+                  ] as const).map(([key, title, description, Icon]) => (
+                    <div key={key} className="panel" style={{ padding: 16 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <Icon size={18} />
+                        <strong>{title}</strong>
+                      </div>
+                      <p style={{ fontSize: 12, color: "var(--muted, #64748b)", margin: "7px 0 12px" }}>{description}</p>
+                      {recommendations[key].length ? recommendations[key].map((item) => (
+                        <div key={item.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 0", borderTop: "1px solid var(--border, #e2e8f0)" }}>
+                          <div style={{ minWidth: 0 }}>
+                            <strong style={{ display: "block", fontSize: 13, overflowWrap: "anywhere" }}>{item.name}</strong>
+                            <span style={{ display: "block", fontSize: 11, color: "var(--muted, #64748b)", marginTop: 4 }}>Win rate {item.previous_win_rate.toFixed(1)}% · Recent form {item.recent_form.toFixed(1)}%</span>
+                          </div>
+                          <button type="button" className="button-outline" style={{ whiteSpace: "nowrap", padding: "8px 10px", fontSize: 12 }} onClick={() => { setPlayerTwo(item.name); setPrediction(false); setPredictionResult(null); setPredictionError(""); }}>Select</button>
+                        </div>
+                      )) : <p style={{ fontSize: 12 }}>Not enough historical data for this category.</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {recommendations && <p style={{ color: "var(--muted, #64748b)", fontSize: 11, marginTop: 12 }}>{recommendations.method}</p>}
+            </section>
+          )}
+          {predictionError && (
             <div className="demo-notice">
               <CircleHelp size={20} />
-              <div>
-                <strong>Prediction API not connected</strong>
-                <p>
-                  Your matchup is ready for the integration phase. This page
-                  has not calculated a winner or probability.
-                </p>
+              <div><strong>Prediction service unavailable</strong><p>{predictionError}</p></div>
+            </div>
+          )}
+          {prediction && predictionResult && (
+            <div className="panel" style={{ marginTop: 18, padding: 22 }}>
+              <span className="eyebrow">MODEL OUTPUT</span>
+              <h3 style={{ marginTop: 10, fontSize: 24 }}>Predicted winner: {predictionResult.predicted_winner}</h3>
+              {predictionResult.confidence_percent !== null && <p>Model confidence for predicted class: <strong>{predictionResult.confidence_percent.toFixed(1)}%</strong></p>}
+              <div className="form-grid" style={{ marginTop: 18 }}>
+                <div><span className="field-label">Previous win rate</span><p><strong>{predictionResult.player1}: {predictionResult.player1_previous_win_rate.toFixed(1)}%</strong></p><p><strong>{predictionResult.player2}: {predictionResult.player2_previous_win_rate.toFixed(1)}%</strong></p></div>
+                <div><span className="field-label">Recent form</span><p><strong>{predictionResult.player1}: {predictionResult.player1_recent_form.toFixed(1)}%</strong></p><p><strong>{predictionResult.player2}: {predictionResult.player2_recent_form.toFixed(1)}%</strong></p></div>
+                <div className="full-width"><span className="field-label">Head-to-head</span><p>Player 1 historical win rate: <strong>{predictionResult.head_to_head_player1_win_rate.toFixed(1)}%</strong></p><p style={{ color: "var(--muted, #64748b)", fontSize: 12 }}>{predictionResult.disclaimer}</p></div>
               </div>
             </div>
           )}

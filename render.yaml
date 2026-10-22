@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: shuttlemetrics-prediction-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements-api.txt
+    startCommand: uvicorn prediction_api:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: FRONTEND_ORIGINS
+        value: https://shuttle-metrics-rlvq.vercel.app
