@@ -19,6 +19,10 @@ import {
   Plus,
   Search,
   Settings2,
+  Bookmark,
+  ChartNoAxesCombined,
+  ClipboardList,
+  SlidersHorizontal,
   Sparkles,
   Target,
   TrendingUp,
@@ -33,7 +37,11 @@ type Page =
   | "My Profile"
   | "Record Match"
   | "My Portfolio"
-  | "Match Prediction";
+  | "Match Prediction"
+  | "Player Stats"
+  | "Analytics"
+  | "Saved Matches"
+  | "Settings";
 
 type Match = {
   id: string;
@@ -82,10 +90,14 @@ function getSupabase(): SupabaseClient | null {
 
 const navItems: { label: Page; icon: typeof Home }[] = [
   { label: "Home", icon: Home },
-  { label: "My Profile", icon: UserRound },
+  { label: "Match Prediction", icon: Target },
   { label: "Record Match", icon: Plus },
   { label: "My Portfolio", icon: BarChart3 },
-  { label: "Match Prediction", icon: Target },
+  { label: "Player Stats", icon: Activity },
+  { label: "Analytics", icon: ChartNoAxesCombined },
+  { label: "Saved Matches", icon: Bookmark },
+  { label: "Settings", icon: SlidersHorizontal },
+  { label: "My Profile", icon: UserRound },
 ];
 
 const trend = [
@@ -220,6 +232,9 @@ export default function HomePage() {
   const [authPassword, setAuthPassword] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState("");
+  const [settingsCompact, setSettingsCompact] = useState(false);
+  const [settingsTips, setSettingsTips] = useState(true);
+  const [settingsConfirmSignOut, setSettingsConfirmSignOut] = useState(true);
 
   useEffect(() => {
     if (!supabase) {
@@ -1267,6 +1282,103 @@ export default function HomePage() {
     );
   }
 
+
+  function renderPlayerStats() {
+    const totalPoints = matches.reduce((sum, match) => sum + match.smashes + match.forced, 0);
+    const averageForced = totalMatches ? matches.reduce((sum, match) => sum + match.forced, 0) / totalMatches : 0;
+    const bestSmashMatch = matches.length ? [...matches].sort((a, b) => b.smashes - a.smashes)[0] : null;
+    const stats = [
+      { label: "Matches played", value: String(totalMatches), detail: "Recorded matches", icon: Trophy, tone: "teal" as const },
+      { label: "Win rate", value: `${winRate}%`, detail: `${wins} wins · ${totalMatches - wins} losses`, icon: Target, tone: "blue" as const },
+      { label: "Smash winners", value: String(matches.reduce((sum, match) => sum + match.smashes, 0)), detail: `${avgSmashes} per match`, icon: Zap, tone: "orange" as const },
+      { label: "Unforced errors", value: String(matches.reduce((sum, match) => sum + match.unforced, 0)), detail: `${avgErrors} per match`, icon: Activity, tone: "purple" as const },
+    ];
+    return (
+      <section className="content-panel">
+        <div className="page-intro"><span className="eyebrow">PLAYER DEVELOPMENT</span><h2>Player Stats</h2><p>A clear snapshot of the habits shaping your game.</p></div>
+        <div className="metrics-grid">{stats.map((item) => <MetricCard key={item.label} title={item.label} value={item.value} note={item.detail} icon={item.icon} tone={item.tone} />)}</div>
+        <div className="dashboard-grid">
+          <section className="panel">
+            <div className="panel-heading"><div><h3>Performance indicators</h3><p>Calculated from your recorded matches.</p></div><Activity size={20} /></div>
+            {[
+              { label: "Smash winners", value: Number(avgSmashes), max: 25, suffix: "per match" },
+              { label: "Forced errors", value: averageForced, max: 25, suffix: "per match" },
+              { label: "Unforced errors", value: Number(avgErrors), max: 25, suffix: "per match" },
+            ].map((item) => <div className="stat-bar-row" key={item.label}><div className="stat-bar-label"><strong>{item.label}</strong><span>{item.value.toFixed(1)} {item.suffix}</span></div><div className="comparison-track"><div className="comparison-fill" style={{ width: `${Math.min(100, item.value / item.max * 100)}%` }} /></div></div>)}
+            {!totalMatches && <p className="form-note">Record a match to start calculating your personal statistics.</p>}
+          </section>
+          <section className="panel">
+            <div className="panel-heading"><div><h3>Match highlights</h3><p>Standout results from your log.</p></div><Trophy size={20} /></div>
+            {bestSmashMatch ? <div className="highlight-card"><span className="eyebrow">MOST SMASH WINNERS</span><strong>{bestSmashMatch.smashes}</strong><p>against {bestSmashMatch.opponent}</p><span className={`result-label ${bestSmashMatch.result.toLowerCase()}`}>{bestSmashMatch.result}</span></div> : <EmptyState icon={Trophy} title="Your highlights will appear here" description="Save your first match to discover your strongest performances." action="Record a match" />}
+            <div className="stat-summary-line"><span>Total attack points tracked</span><strong>{totalPoints}</strong></div>
+          </section>
+        </div>
+        <section className="panel recent-panel"><div className="panel-heading"><div><h3>Recent performance</h3><p>Latest recorded matches and key statistics.</p></div><button className="button-outline" onClick={() => goToPage("Saved Matches")}>View matches <ArrowRight size={15} /></button></div>{renderMatchList(matches.slice(0, 5), true)}</section>
+      </section>
+    );
+  }
+
+  function renderAnalytics() {
+    const resultRate = totalMatches ? (wins / totalMatches) * 100 : 0;
+    const maxMetric = Math.max(1, ...matches.map((m) => m.smashes + m.forced + m.unforced));
+    return (
+      <section className="content-panel">
+        <div className="page-intro"><span className="eyebrow">DATA & TRENDS</span><h2>Analytics</h2><p>Understand what your recorded match data says about your game.</p></div>
+        <div className="metrics-grid">
+          <MetricCard title="Win rate" value={`${resultRate.toFixed(0)}%`} note="All recorded matches" icon={Target} tone="teal" />
+          <MetricCard title="Avg. smash winners" value={avgSmashes} note="Per match" icon={Zap} tone="orange" />
+          <MetricCard title="Avg. forced errors" value={totalMatches ? (matches.reduce((s,m)=>s+m.forced,0)/totalMatches).toFixed(1) : "0.0"} note="Per match" icon={TrendingUp} tone="blue" />
+          <MetricCard title="Avg. unforced errors" value={avgErrors} note="Per match" icon={Activity} tone="purple" direction="down" />
+        </div>
+        <div className="dashboard-grid">
+          <section className="panel">
+            <div className="panel-heading"><div><h3>Match-by-match workload</h3><p>Stacked activity indicators for each recorded match.</p></div><ChartNoAxesCombined size={20} /></div>
+            {matches.length ? <div className="analytics-match-bars">{[...matches].reverse().map((m) => <div className="analytics-match" key={m.id}><div className="analytics-match-head"><strong>vs. {m.opponent}</strong><span>{m.result}</span></div><div className="comparison-track"><div className="comparison-fill" style={{width:`${Math.max(3,(m.smashes+m.forced+m.unforced)/maxMetric*100)}%`}} /></div><small>{m.smashes} smash winners · {m.forced} forced · {m.unforced} unforced</small></div>)}</div> : <EmptyState icon={ChartNoAxesCombined} title="No analytics yet" description="Record match results to populate your charts with real data." action="Record a match" />}
+          </section>
+          <section className="panel">
+            <div className="panel-heading"><div><h3>Results breakdown</h3><p>Win/loss balance from your match log.</p></div><Trophy size={20} /></div>
+            <div className="result-breakdown"><div className="result-breakdown-number"><strong>{wins}</strong><span>Wins</span></div><div className="result-breakdown-number"><strong>{totalMatches-wins}</strong><span>Losses</span></div></div>
+            <div className="comparison-track breakdown-track"><div className="comparison-fill" style={{width:`${resultRate}%`}} /></div>
+            <p className="form-note">These summaries reflect only matches saved in this account. They are descriptive statistics, not a prediction of future results.</p>
+          </section>
+        </div>
+      </section>
+    );
+  }
+
+  function renderSavedMatches() {
+    return (
+      <section className="content-panel">
+        <div className="page-intro"><span className="eyebrow">MATCH ARCHIVE</span><h2>Saved Matches</h2><p>Browse the match records saved to your workspace.</p></div>
+        <div className="panel recent-panel">
+          <div className="panel-heading"><div><h3>Match archive</h3><p>{filteredMatches.length} of {matches.length} matches</p></div><label className="search-field"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search opponent" aria-label="Search saved matches" /></label></div>
+          {renderMatchList(filteredMatches, true)}
+          <div className="form-actions"><button className="button-primary" onClick={() => goToPage("Record Match")}><Plus size={16} /> Record a match</button></div>
+        </div>
+        <p className="form-note">Saved Matches shows the match records stored for your account. Demo mode uses sample records and does not save changes.</p>
+      </section>
+    );
+  }
+
+  function renderSettings() {
+    return (
+      <section className="content-panel">
+        <div className="page-intro"><span className="eyebrow">WORKSPACE PREFERENCES</span><h2>Settings</h2><p>Manage local display preferences and account access.</p></div>
+        <section className="panel settings-panel">
+          <div className="settings-row"><div className="settings-row-icon"><SlidersHorizontal size={19} /></div><div className="settings-row-copy"><strong>Compact dashboard cards</strong><p>Reduce card spacing for a denser overview.</p></div><label className="switch-control"><input type="checkbox" checked={settingsCompact} onChange={(e) => setSettingsCompact(e.target.checked)} /><span /></label></div>
+          <div className="settings-row"><div className="settings-row-icon"><Sparkles size={19} /></div><div className="settings-row-copy"><strong>Training tips</strong><p>Show helpful prompts around your workspace.</p></div><label className="switch-control"><input type="checkbox" checked={settingsTips} onChange={(e) => setSettingsTips(e.target.checked)} /><span /></label></div>
+          <div className="settings-row"><div className="settings-row-icon"><CircleHelp size={19} /></div><div className="settings-row-copy"><strong>Confirm before signing out</strong><p>Keep account actions deliberate.</p></div><label className="switch-control"><input type="checkbox" checked={settingsConfirmSignOut} onChange={(e) => setSettingsConfirmSignOut(e.target.checked)} /><span /></label></div>
+          <p className="form-note">These are UI preferences for this session and are not saved to your Supabase account yet.</p>
+        </section>
+        <section className="panel settings-panel">
+          <div className="panel-heading"><div><h3>Account</h3><p>Profile and sign-in actions.</p></div><UserRound size={20} /></div>
+          <button className="action-row" onClick={() => goToPage("My Profile")}><div className="action-icon teal"><UserRound size={18} /></div><div><strong>My Profile</strong><span>Update your player name and playing style</span></div><ChevronRight size={18} /></button>
+          <button className="action-row" onClick={handleSignOut}><div className="action-icon purple"><X size={18} /></div><div><strong>Sign out</strong><span>End the current workspace session</span></div><ChevronRight size={18} /></button>
+        </section>
+      </section>
+    );
+  }
+
   function renderCurrentPage() {
     switch (activePage) {
       case "My Profile":
@@ -1277,6 +1389,14 @@ export default function HomePage() {
         return renderPortfolio();
       case "Match Prediction":
         return renderPrediction();
+      case "Player Stats":
+        return renderPlayerStats();
+      case "Analytics":
+        return renderAnalytics();
+      case "Saved Matches":
+        return renderSavedMatches();
+      case "Settings":
+        return renderSettings();
       default:
         return renderHome();
     }
@@ -1328,7 +1448,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${settingsCompact ? "compact-dashboard" : ""}`}>
       <aside className={`sidebar ${mobileMenuOpen ? "sidebar-open" : ""}`}>
         <div className="sidebar-brand">
           <Logo />
@@ -1357,7 +1477,7 @@ export default function HomePage() {
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <div className="help-card">
+          {settingsTips && <div className="help-card">
             <div className="help-icon">
               <CircleHelp size={18} />
             </div>
@@ -1366,7 +1486,7 @@ export default function HomePage() {
             <button onClick={() => goToPage("My Portfolio")}>
               Explore your stats <ArrowRight size={14} />
             </button>
-          </div>
+          </div>}
           <div className="sidebar-footer">
             <div className="mini-brand-mark">
               <Activity size={17} />
@@ -1476,7 +1596,7 @@ export default function HomePage() {
       </main>
 
       <nav className="bottom-nav" aria-label="Mobile navigation">
-        {navItems.map(({ label, icon: Icon }) => (
+        {([navItems[0], navItems[2], navItems[4], navItems[1], navItems[5]]).map(({ label, icon: Icon }) => (
           <button
             key={label}
             className={`bottom-nav-item ${activePage === label ? "active" : ""} ${
@@ -1499,6 +1619,31 @@ export default function HomePage() {
 @media(max-width:1200px){.sidebar{width:225px;padding-left:14px;padding-right:14px}.main-area{margin-left:225px}.topbar{padding:0 24px}.page-content{padding:25px 24px 22px}.metrics-grid{gap:10px}.metric-card{padding:15px}.metric-value{font-size:24px}.dashboard-grid{grid-template-columns:minmax(0,1fr) minmax(285px,.9fr)}.banner-art{right:10px;opacity:.7}.welcome-content{max-width:65%}}
 @media(max-width:900px){.sidebar{width:250px;transform:translateX(-105%);transition:transform .22s ease;box-shadow:none}.sidebar.sidebar-open{transform:translateX(0);box-shadow:18px 0 50px #17212f24}.sidebar-close{display:grid}.mobile-overlay{display:block;position:fixed;inset:0;background:#17212f60;z-index:25;width:100%;height:100%}.main-area{margin-left:0}.mobile-menu-button{display:grid}.topbar{height:66px;padding:0 20px}.breadcrumb{display:none}.mobile-logo{display:flex;align-items:center;gap:9px;font-size:13px}.mobile-logo .brand-mark{width:34px;height:34px;border-radius:10px}.topbar-left{gap:10px}.top-search{display:none}.page-content{padding:22px 20px 28px}.mobile-page-title{display:block;margin:0 0 18px}.mobile-page-title h1{font:800 23px Manrope,sans-serif;letter-spacing:-.05em;margin:7px 0 0}.welcome-banner{min-height:210px;padding:28px}.banner-art{right:-45px;opacity:.42}.welcome-content{max-width:75%}.metrics-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.dashboard-grid{grid-template-columns:1fr}.bottom-nav{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));position:fixed;z-index:20;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--sm-border);padding:7px 8px calc(7px + env(safe-area-inset-bottom));box-shadow:0 -5px 20px #17212f08}.bottom-nav-item{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:0;padding:4px 2px;border-radius:9px;background:transparent;color:#8993a2;font-size:9px;font-weight:700}.bottom-icon{width:30px;height:27px;border-radius:9px;display:grid;place-items:center}.bottom-nav-item.active{color:#0d9488}.bottom-nav-item.active .bottom-icon{background:#e5f8f4}.bottom-nav-item.bottom-record .bottom-icon{background:#0d9488;color:#fff;box-shadow:0 4px 10px #0d94882b}.page-content{padding-bottom:110px}.app-footer{padding-bottom:4px}.profile-chip{max-width:43px;padding:0}.profile-chip>span,.profile-chip>svg{display:none}.profile-chip-avatar{width:34px;height:34px}}
 @media(max-width:560px){.topbar{padding:0 13px;gap:8px}.topbar-right{gap:8px}.page-content{padding:17px 13px 105px}.mobile-page-title h1{font-size:21px}.welcome-banner{padding:23px 20px;min-height:225px;border-radius:16px}.welcome-content{max-width:100%}.welcome-banner h2{font-size:27px;max-width:280px}.welcome-banner p{font-size:12px;max-width:270px}.banner-art{right:-120px;top:25px;opacity:.22}.art-label{display:none}.section-block{margin-top:25px}.section-heading{align-items:flex-start}.section-heading h2,.page-intro h2{font-size:20px}.section-heading p{max-width:235px}.desktop-only{display:none!important}.metrics-grid{gap:9px}.metric-card{padding:13px;border-radius:13px}.metric-icon{width:34px;height:34px;border-radius:10px}.trend-pill{font-size:8px;padding:4px 5px}.metric-title{font-size:10px;line-height:1.4;margin-top:13px}.metric-value{font-size:23px}.panel{padding:16px;border-radius:14px}.panel-heading{align-items:flex-start}.panel-heading h3{font-size:14px}.dashboard-grid{gap:13px;margin-top:14px}.bar-chart{gap:8px;padding:0 2px}.chart-summary{align-items:flex-start}.chart-tag{font-size:8px}.recent-panel .panel-heading{align-items:center}.match-row{gap:9px}.result-mark{width:31px;height:31px;border-radius:9px}.match-main strong{font-size:11px}.match-score{font-size:10px}.result-label{font-size:8px;padding:4px 5px}.content-panel{gap:14px}.page-intro h2{font-size:23px}.profile-panel,.form-panel{padding:17px}.profile-avatar{width:64px;height:64px;border-radius:18px}.profile-avatar-wrap{gap:12px}.profile-avatar-wrap h3{font-size:15px}.form-grid{grid-template-columns:1fr;gap:15px}.full-width{grid-column:auto}.form-section-title{grid-column:auto}.form-actions{grid-column:auto}.form-actions .button-primary{width:100%}.comparison-grid{grid-template-columns:1fr}.comparison-item{padding:13px}.portfolio-comparison{padding:16px}.search-field{max-width:145px;padding:0 8px}.search-field input{width:95px;font-size:11px}.prediction-banner{padding:18px;gap:12px}.prediction-banner-icon{width:44px;height:44px;border-radius:13px}.prediction-banner h3{font-size:16px}.prediction-banner p{font-size:10px}.model-info{flex-direction:column;gap:9px}.app-footer{font-size:9px;flex-wrap:wrap}.app-footer span:last-child{display:none}.topbar .icon-button{width:34px;height:34px}.mobile-logo strong{font-size:12px}.notice-bar{font-size:11px;padding:10px}.match-main .match-stats{font-size:9px}}
+
+.stat-bar-row{display:flex;flex-direction:column;gap:9px;margin:20px 0}.stat-bar-label{display:flex;justify-content:space-between;gap:12px;font-size:12px}.stat-bar-label span{color:var(--sm-muted);font-size:11px}.highlight-card{padding:20px;border-radius:14px;background:linear-gradient(135deg,#e9faf6,#f6fbff);border:1px solid #d8f1eb}.highlight-card>strong{display:block;font:800 42px Manrope,sans-serif;margin-top:12px;color:#087f75}.highlight-card p{font-size:12px;color:var(--sm-muted);margin:4px 0 12px}.stat-summary-line{display:flex;justify-content:space-between;gap:12px;border-top:1px solid var(--sm-border);margin-top:18px;padding-top:14px;font-size:12px;color:var(--sm-muted)}.stat-summary-line strong{color:var(--sm-text)}.analytics-match{padding:14px 0;border-top:1px solid #eef1f4}.analytics-match:first-child{border-top:0}.analytics-match-head{display:flex;justify-content:space-between;gap:10px;font-size:12px;margin-bottom:9px}.analytics-match-head span{font-size:10px;font-weight:800;color:#0d9488}.analytics-match small{display:block;color:var(--sm-muted);font-size:10px;margin-top:8px}.result-breakdown{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:24px 0 18px}.result-breakdown-number{padding:20px;border-radius:13px;background:#f7fafb;display:flex;flex-direction:column;gap:5px}.result-breakdown-number strong{font:800 30px Manrope,sans-serif}.result-breakdown-number span{font-size:11px;color:var(--sm-muted)}.breakdown-track{height:9px}.settings-panel{padding:8px 22px}.settings-row{display:flex;align-items:center;gap:14px;padding:19px 0;border-bottom:1px solid #eef1f4}.settings-row:last-of-type{border-bottom:0}.settings-row-icon{width:40px;height:40px;display:grid;place-items:center;background:#e5f8f4;color:#0d9488;border-radius:12px;flex-shrink:0}.settings-row-copy{flex:1;min-width:0}.settings-row-copy strong{font-size:13px}.settings-row-copy p{font-size:11px;color:var(--sm-muted);margin:5px 0 0;line-height:1.5}.switch-control{position:relative;display:inline-flex;width:42px;height:24px;flex-shrink:0}.switch-control input{position:absolute;opacity:0;width:1px;height:1px}.switch-control span{position:absolute;inset:0;background:#d3dbe3;border-radius:99px;cursor:pointer;transition:background .2s}.switch-control span:before{content:"";position:absolute;width:18px;height:18px;left:3px;top:3px;border-radius:50%;background:white;box-shadow:0 1px 4px #0002;transition:transform .2s}.switch-control input:checked+span{background:#0d9488}.switch-control input:checked+span:before{transform:translateX(18px)}.switch-control input:focus-visible+span{outline:3px solid #8ee7dc;outline-offset:3px}.app-shell.compact-dashboard .metric-card{padding:12px}.app-shell.compact-dashboard .panel{padding:16px}
+@media(max-width:560px){.settings-panel{padding:6px 15px}.settings-row{gap:10px}.settings-row-copy strong{font-size:12px}.highlight-card>strong{font-size:35px}.stat-bar-label{font-size:11px}}
+/* Clean Athlete Dashboard: polished navy, white and teal theme */
+.clean-athlete-dashboard-theme{}
+.app-shell .sidebar{background:linear-gradient(180deg,#0b2430 0%,#102d38 100%);border-right:1px solid #21414b;color:#edf7f8}
+.app-shell .sidebar-label,.app-shell .brand-copy small{color:#9db6c0}
+.app-shell .sidebar-footer{border-top-color:#24434c}
+.app-shell .sidebar-footer span{color:#a7bbc3}
+.app-shell .help-card{background:#153642;border-color:#2a515b;color:#eff9fa}
+.app-shell .help-card p{color:#b4c8ce}
+.app-shell .help-icon{background:#1b5155;color:#79e4d5}
+.app-shell .help-card button{color:#70e2d2}
+.app-shell .nav-link{color:#c0d0d6}
+.app-shell .nav-link:hover{background:#193d48;color:#fff}
+.app-shell .nav-link.active{background:#174b53;color:#7ce5d5}
+.app-shell .nav-link.nav-record{background:#0d9488;color:#fff}
+.app-shell .nav-link.nav-record:hover{background:#10a395}
+.app-shell .topbar{background:rgba(255,255,255,.94)}
+.app-shell .welcome-banner{background:linear-gradient(112deg,#123b4a 0%,#14606a 58%,#168c83 100%)}
+.app-shell .metric-card,.app-shell .panel{box-shadow:0 5px 18px rgba(16,36,48,.035)}
+.app-shell .button-primary{background:#0b9186}
+.app-shell .button-primary:hover{background:#08796f}
+.app-shell .bottom-nav{background:#fff}
+@media(max-width:900px){.app-shell .sidebar{background:linear-gradient(180deg,#0b2430 0%,#102d38 100%)}.app-shell .sidebar.sidebar-open{box-shadow:18px 0 50px rgba(8,28,37,.35)}}
 @media(prefers-reduced-motion:reduce){.app-shell *{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}
 `}</style>
 
