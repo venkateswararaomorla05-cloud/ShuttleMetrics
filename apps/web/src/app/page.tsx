@@ -545,11 +545,8 @@ export default function HomePage() {
             <span className="eyebrow light-eyebrow">
               <Sparkles size={14} /> YOUR PERFORMANCE HUB
             </span>
-            <h2>Every rally tells a story.</h2>
-            <p>
-              Understand your game, track your progress, and make every match
-              count.
-            </p>
+            <h2>Welcome back, {playerName || "Player"}!</h2>
+            <p>Analyze. Predict. Improve. Your badminton performance companion.</p>
             <button
               className="button-white"
               onClick={() => goToPage("Record Match")}
@@ -1403,7 +1400,26 @@ export default function HomePage() {
   }
 
   if (authLoading) {
-    return <div className="auth-screen"><div className="auth-card"><div className="brand-mark"><Activity size={24} /></div><p>Loading your ShuttleMetrics workspace…</p></div><style jsx global>{`.auth-screen{min-height:100vh;display:grid;place-items:center;background:#08111f;color:#e8f0fb;font-family:Arial,sans-serif}.auth-card{width:min(420px,92vw);padding:32px;border:1px solid #26374d;background:#101c2d;border-radius:18px;text-align:center}.auth-card p{color:#aebdd0;font-size:14px}`}</style></div>;
+    return <div className="auth-screen"><div className="auth-card"><div className="brand-mark"><Activity size={24} /></div><p>Loading your ShuttleMetrics workspace…</p></div><style jsx global>{`.auth-screen{min-height:100vh;display:grid;place-items:center;background:#08111f;color:#e8f0fb;font-family:Arial,sans-serif}.auth-card{width:min(420px,92vw);padding:32px;border:1px solid #26374d;background:#101c2d;border-radius:18px;text-align:center}.auth-card p{color:#aebdd0;font-size:14px}`}
+/* Reference-matched visual pass: airy sports dashboard with photographic-style court accents */
+.app-shell .welcome-banner{background:linear-gradient(100deg,#f3fbfc 0%,#e7f6f5 50%,#ccebe7 100%);color:#102a36;min-height:205px;padding:28px 30px;border:1px solid #d8eceb;box-shadow:0 12px 28px rgba(19,79,88,.06)}
+.app-shell .welcome-banner:before{content:"";position:absolute;right:0;top:0;bottom:0;width:48%;background:radial-gradient(ellipse at 70% 55%,rgba(10,148,136,.25),transparent 62%),linear-gradient(120deg,transparent 20%,rgba(13,148,136,.08));clip-path:polygon(18% 0,100% 0,100% 100%,0 100%)}
+.app-shell .welcome-banner:after{content:"";position:absolute;right:55px;top:18px;width:185px;height:165px;border-radius:50%;border:1px solid #0d94882b;box-shadow:0 0 0 16px #0d94880a,0 0 0 34px #0d948807}
+.app-shell .welcome-content{max-width:60%;z-index:3}.app-shell .welcome-banner .light-eyebrow{color:#0d9488}.app-shell .welcome-banner h2{color:#102a36;font-size:clamp(29px,3vw,39px);max-width:480px;margin:12px 0 8px}.app-shell .welcome-banner p{color:#405b67;font-size:12px;line-height:1.7;margin-bottom:17px}
+.app-shell .welcome-banner .button-white{background:#fff;color:#087f75;border:1px solid #dcece9;box-shadow:0 5px 15px #123b4a0b}
+.app-shell .banner-art{z-index:2;right:48px;top:8px;width:245px;height:185px;opacity:1}.app-shell .art-circle{border-color:#0d94883a}.app-shell .art-orbit{border-color:#0d94884d}.app-shell .art-shuttle{background:linear-gradient(145deg,#0d9488,#155a64);border:1px solid #ffffff99;color:#fff;box-shadow:0 10px 25px #0d94882c}.app-shell .art-label{color:#087f75;background:#ffffffb8;border-color:#cce7e3}
+.app-shell .section-heading h2{font-size:22px}.app-shell .metric-card{background:linear-gradient(145deg,#fff,#fafdfe);padding:16px 17px;border-radius:14px}.app-shell .metric-card:after{width:0}.app-shell .metric-icon.teal{background:#d9f7ef;color:#079b80}.app-shell .metric-icon.blue{background:#e0efff;color:#3288cb}.app-shell .metric-icon.orange{background:#fff0e2;color:#ed8b32}.app-shell .metric-icon.purple{background:#f0e7ff;color:#9164d9}
+.app-shell .dashboard-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.app-shell .performance-panel,.app-shell .quick-panel,.app-shell .recent-panel{background:#fff}
+.app-shell .prediction-banner{background:linear-gradient(100deg,#f0fbf9,#d8f3ec);color:#102a36;border:1px solid #d4eee7;box-shadow:none}.app-shell .prediction-banner-icon{background:#d2f1e9;color:#078e80}.app-shell .prediction-banner .light-eyebrow{color:#0d9488}.app-shell .prediction-banner h3{color:#102a36}.app-shell .prediction-banner p{color:#506b76}
+.app-shell .form-panel{border-color:#e1eaee;box-shadow:0 8px 25px #123b4a08}.app-shell .form-panel .panel-heading h3{font-size:15px}
+.app-shell .page-intro h2{letter-spacing:-.055em}.app-shell .page-intro p{max-width:650px}
+.app-shell .form-grid{gap:16px}.app-shell .field input,.app-shell .field select,.app-shell .field textarea{background:#fff;border-color:#dce6eb;box-shadow:0 1px 2px #102a3605}
+.app-shell .button-primary{background:linear-gradient(105deg,#0d9d8b,#078579);box-shadow:0 5px 12px #0d94881c}
+.app-shell .panel .panel-heading{align-items:center}
+@media(max-width:900px){.app-shell .welcome-content{max-width:72%}.app-shell .banner-art{right:0;opacity:.8}}
+@media(max-width:560px){.app-shell .welcome-banner{min-height:195px;padding:22px 18px}.app-shell .welcome-content{max-width:100%}.app-shell .welcome-banner h2{font-size:27px;max-width:250px}.app-shell .welcome-banner p{max-width:250px}.app-shell .banner-art{right:-120px;opacity:.24}.app-shell .welcome-banner:after{right:-20px;opacity:.5}.app-shell .dashboard-grid{grid-template-columns:1fr}}
+
+</style></div>;
   }
 
   if (!session && !demoMode) {
