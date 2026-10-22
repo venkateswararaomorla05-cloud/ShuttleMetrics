@@ -90,14 +90,14 @@ function getSupabase(): SupabaseClient | null {
 
 const navItems: { label: Page; icon: typeof Home }[] = [
   { label: "Home", icon: Home },
-  { label: "My Profile", icon: UserRound },
+  { label: "Match Prediction", icon: Target },
   { label: "Record Match", icon: Plus },
   { label: "My Portfolio", icon: BarChart3 },
   { label: "Player Stats", icon: Activity },
   { label: "Analytics", icon: ChartNoAxesCombined },
   { label: "Saved Matches", icon: Bookmark },
   { label: "Settings", icon: SlidersHorizontal },
-  { label: "Match Prediction", icon: Target },
+  { label: "My Profile", icon: UserRound },
 ];
 
 const trend = [
